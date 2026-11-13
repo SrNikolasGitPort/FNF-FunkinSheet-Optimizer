@@ -1,11 +1,12 @@
 /* worker.js — executa o lote de otimização fora da thread da interface. */
 'use strict';
-importScripts('png.js', 'sparrow.js', 'resample.js', 'pack.js', 'config.js', 'pipeline.js');
+importScripts('i18n.js', 'png.js', 'sparrow.js', 'resample.js', 'pack.js', 'config.js', 'pipeline.js');
 
 self.onmessage = async (ev) => {
   const m = ev.data;
   if (!m || m.type !== 'run') return;
   try {
+    if (m.lang) self.FNF.setLang(m.lang);
     const batch = await self.FNF.runBatch({
       atlases: m.atlases,
       configs: m.configs,

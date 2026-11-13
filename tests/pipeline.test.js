@@ -105,8 +105,31 @@ const kb = (n) => (n / 1024).toFixed(1) + 'KB';
   assert.ok(notrim.validation.ok); console.log('  ok sem trim/dedup PNG', kb(notrim.stats.pngAfter));
 
   // ---- 3) rotated e fora dos limites
-  await assert.rejects(() => FNF.optimizeAtlas({ ...atlas, xmlText: atlas.xmlText.replace('idle0001"', 'idle0001" rotated="true"') }, {}), /rotacionado/);
-  await assert.rejects(() => FNF.optimizeAtlas({ ...atlas, xmlText: atlas.xmlText.replace('x="0" y="0"', 'x="990" y="0"') }, {}), /fora dos limites/);
+  {
+    // rotated="true": região guardada girada 90° horário; o resultado deve ser idêntico ao do atlas sem rotação
+    const src = await FNF.decodePNG(atlas.pngBytes);
+    const f0 = FNF.parseSparrow(atlas.xmlText).frames[0];
+    const upright = new Uint8Array(f0.w * f0.h * 4), rot = new Uint8Array(f0.h * f0.w * 4);
+    for (let y = 0; y < f0.h; y++) for (let x = 0; x < f0.w; x++) {
+      const s0 = ((f0.y + y) * src.width + f0.x + x) * 4;
+      upright.set(src.data.subarray(s0, s0 + 4), (y * f0.w + x) * 4);
+      // CW: (x,y) -> (H-1-y, x) numa imagem de largura H
+      rot.set(src.data.subarray(s0, s0 + 4), (x * f0.h + (f0.h - 1 - y)) * 4);
+    }
+    const mk = async (data, w, h, rotated) => ({
+      name: 'rot', pngBytes: (await FNF.encodePNG(data, w, h, { mode: 'rgba' })).bytes,
+      xmlText: '<TextureAtlas imagePath="rot.png"><SubTexture name="a0001" x="0" y="0" width="' + w + '" height="' + h + '"' + (rotated ? ' rotated="true"' : '') + '/></TextureAtlas>',
+    });
+    const A = await FNF.optimizeAtlas(await mk(upright, f0.w, f0.h, false), { scale: 1 });
+    const B = await FNF.optimizeAtlas(await mk(rot, f0.h, f0.w, true), { scale: 1 });
+    assert.ok(B.validation.ok, B.validation.errors.join());
+    assert.deepStrictEqual(Array.from(B.pngBytes), Array.from(A.pngBytes), 'rotated deve gerar o mesmo PNG do atlas sem rotação');
+    assert.strictEqual(B.xmlText, A.xmlText); assert.ok(!/rotated/.test(B.xmlText));
+    const B2 = await FNF.optimizeAtlas(await mk(rot, f0.h, f0.w, true), { scale: 0.5 });
+    assert.ok(B2.validation.ok && B2.validation.psnrMin > 30);
+    console.log('  ok rotated="true" idêntico ao atlas sem rotação (S=1) e ok com S=0.5');
+  }
+  await assert.rejects(() => FNF.optimizeAtlas({ ...atlas, xmlText: atlas.xmlText.replace('x="0" y="0"', 'x="990" y="0"') }, {}), /outside the PNG/);
   await assert.rejects(() => FNF.optimizeAtlas({ ...atlas, xmlText: '<foo/>' }, {}), /TextureAtlas/);
   console.log('  ok erros de entrada');
 
@@ -126,17 +149,17 @@ const kb = (n) => (n / 1024).toFixed(1) + 'KB';
   assert.deepStrictEqual(Array.from(b.configs[0].bytes), Array.from(cfgBytes), 'config.json deve ficar idêntico com S=1');
   assert.deepStrictEqual(Array.from(b.configs[0].offsets.bytes), Array.from(offBytes), 'offsets.txt deve ficar byte a byte idêntico com S=1');
   console.log('  ok Leather S=1: config.json e offsets.txt idênticos byte a byte');
-  b = await FNF.runBatch({ atlases: paired.atlases, configs: paired.configs, opts: { scale: 0.5, suffix: '_opt' } });
+  b = await FNF.runBatch({ atlases: paired.atlases, configs: paired.configs, opts: { scale: 0.5, suffix: '_opt', addScaleField: false, adjustOffsets: false } });
   assert.ok(b.results.every((x) => x.validation.ok));
   assert.strictEqual(b.results[0].Sx, b.results[1].Sx, 'extraSheets devem usar a mesma escala efetiva');
   const c = b.configs[0];
-  assert.ok(c.warnings.some((w) => /não tem campo de escala/.test(w)), 'deve avisar que não há campo de escala');
+  assert.ok(c.warnings.some((w) => /no scale field/.test(w)), 'deve avisar que não há campo de escala');
   assert.strictEqual(JSON.parse(c.text).imagePath, 'Boyfriend_Assets_opt'); assert.deepStrictEqual(JSON.parse(c.text).extraSheets, ['BFCheer_opt']);
   assert.strictEqual(c.offsets.text, FNF.textDecode(offBytes), 'offsets inalterados por padrão');
   // só 2 trechos mudaram: nada mais
   assert.strictEqual(c.text.replace('"Boyfriend_Assets_opt"', '"Boyfriend_Assets"').replace('"BFCheer_opt"', '"BFCheer"'), c.before);
   console.log('  ok Leather S=0.5: aviso de escala ausente, nomes _opt, resto do JSON intacto');
-  b = await FNF.runBatch({ atlases: paired.atlases, configs: paired.configs, opts: { scale: 0.5, addScaleField: true, scaleOffsets: true } });
+  b = await FNF.runBatch({ atlases: paired.atlases, configs: paired.configs, opts: { scale: 0.5, addScaleField: true, adjustOffsets: false, scaleOffsets: true } });
   const c2 = b.configs[0];
   assert.ok(JSON.parse(c2.text).scale > 1.9 && JSON.parse(c2.text).scale < 2.1);
   assert.ok(/^scared 2 -1\r?$/m.test(c2.offsets.text.split('\n')[0]) || /^scared /m.test(c2.offsets.text));
@@ -147,7 +170,7 @@ const kb = (n) => (n / 1024).toFixed(1) + 'KB';
   const psych = '{\n\t"animations": [\n\t\t{ "anim": "idle", "name": "BF idle dance", "fps": 24, "loop": false, "offsets": [0, 0] }\n\t],\n\t"vocals_file": "",\n\t"no_antialiasing": false,\n\t"image": "characters/Boyfriend_Assets",\n\t"position": [0, 350],\n\t"healthicon": "bf",\n\t"flip_x": true,\n\t"healthbar_colors": [49, 176, 209],\n\t"camera_position": [0, 0],\n\t"sing_duration": 4,\n\t"scale": 1.2\n}\n';
   const pp = FNF.pairFiles([{ name: 'Boyfriend_Assets.png', path: 'Boyfriend_Assets.png', bytes: atlas.pngBytes }, { name: 'Boyfriend_Assets.xml', path: 'Boyfriend_Assets.xml', bytes: FNF.textEncode(atlas.xmlText) }, { name: 'bf.json', path: 'bf.json', bytes: FNF.textEncode(psych) }]);
   assert.strictEqual(pp.configs[0].kind, 'psych');
-  b = await FNF.runBatch({ atlases: pp.atlases, configs: pp.configs, opts: { scale: 0.5 } });
+  b = await FNF.runBatch({ atlases: pp.atlases, configs: pp.configs, opts: { scale: 0.5, adjustOffsets: false } });
   const pj = b.configs[0];
   const newScale = JSON.parse(pj.text).scale;
   console.log('  ok Psych scale 1.2 →', newScale, '(fator', pj.invScale.toFixed(4) + ')');
@@ -159,6 +182,36 @@ const kb = (n) => (n / 1024).toFixed(1) + 'KB';
   b = await FNF.runBatch({ atlases: pp2.atlases, configs: pp2.configs, opts: { scale: 0.25 } });
   assert.ok(JSON.parse(b.configs[0].text).scale > 3.5); assert.strictEqual(JSON.parse(b.configs[0].text).image, 'characters/Boyfriend_Assets');
   console.log('  ok Psych sem scale: adicionado', JSON.parse(b.configs[0].text).scale);
+
+  // ---- 5b) offsets + escala automática
+  {
+    const psychO = psych.replace('"offsets": [0, 0]', '"offsets": [10, -20.5]');
+    const po = FNF.pairFiles([{ name: 'Boyfriend_Assets.png', path: 'a.png', bytes: atlas.pngBytes }, { name: 'Boyfriend_Assets.xml', path: 'a.xml', bytes: FNF.textEncode(atlas.xmlText) }, { name: 'bf.json', path: 'bf.json', bytes: FNF.textEncode(psychO) }]);
+    const bo = await FNF.runBatch({ atlases: po.atlases, configs: po.configs, opts: { scale: 0.5 } });
+    const j0 = JSON.parse(psychO), j1 = JSON.parse(bo.configs[0].text), r0 = bo.results[0];
+    const C = [r0.ref.fw0 / 2, r0.ref.fh0 / 2], C1 = [r0.ref.fw1 / 2, r0.ref.fh1 / 2];
+    const s0 = j0.scale, s1 = j1.scale, o0 = j0.animations[0].offsets, o1 = j1.animations[0].offsets;
+    // posição na tela (Flixel): -offset + C + s*(P-C), antes e depois, para um ponto do frame virtual
+    for (const P of [[0, 0], [100, 130], [220, 260]]) {
+      const a = [-o0[0] + C[0] + s0 * (P[0] - C[0]), -o0[1] + C[1] + s0 * (P[1] - C[1])];
+      const P1 = [P[0] * r0.Sx, P[1] * r0.Sy];
+      const b = [-o1[0] + C1[0] + s1 * (P1[0] - C1[0]), -o1[1] + C1[1] + s1 * (P1[1] - C1[1])];
+      assert.ok(Math.abs(a[0] - b[0]) < 0.01 && Math.abs(a[1] - b[1]) < 0.01, 'alinhamento: ' + a + ' vs ' + b);
+    }
+    assert.deepStrictEqual(o1, [-45, -85.5]);
+    console.log('  ok Psych offsets ajustados', o0, '→', o1, '(alinhamento na tela conferido)');
+    // Leather: offsets.txt recebe o mesmo deslocamento
+    const bl = await FNF.runBatch({ atlases: paired.atlases, configs: paired.configs, opts: { scale: 0.5 } });
+    assert.ok(JSON.parse(bl.configs[0].text).scale > 1.9);
+    const l0 = FNF.textDecode(offBytes).split('\n')[0], l1 = bl.configs[0].offsets.text.split('\n')[0];
+    assert.notStrictEqual(l0, l1); console.log('  ok Leather offsets:', l0.trim(), '→', l1.trim());
+    // escala automática
+    const au = await FNF.optimizeAtlas(atlas, {});
+    assert.ok(au.auto && au.scale < 1 && au.validation.ok, 'auto deve reduzir: ' + au.scale);
+    const au2 = await FNF.optimizeAtlas(atlas, { autoPsnr: 45 });
+    assert.ok(au2.scale >= au.scale);
+    console.log('  ok escala automática', au.scale, '(PSNR 30) e', au2.scale, '(PSNR 45)');
+  }
 
   // ---- 6) ZIP
   const files = FNF.collectOutputs(b);

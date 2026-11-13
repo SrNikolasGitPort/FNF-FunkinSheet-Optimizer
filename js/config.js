@@ -7,14 +7,14 @@
   // ---------------------------------------------------------------- JSON com posições
   function parseJSONSpans(text) {
     let i = text.charCodeAt(0) === 0xfeff ? 1 : 0;
-    const fail = (m) => { throw new Error('JSON inválido: ' + m + ' (posição ' + i + ').'); };
+    const fail = (m) => { throw new Error(FNF.t('cfg.err.json',{m,i})); };
     const ws = () => { while (i < text.length) { const c = text.charCodeAt(i); if (c === 32 || c === 9 || c === 10 || c === 13) i++; else break; } };
     function str() {
       const start = i;
-      if (text[i] !== '"') fail('esperava aspas');
+      if (text[i] !== '"') fail(FNF.t('cfg.j.quote'));
       i++;
       while (i < text.length && text[i] !== '"') i += text[i] === '\\' ? 2 : 1;
-      if (i >= text.length) fail('string não terminada');
+      if (i >= text.length) fail(FNF.t('cfg.j.unterminated'));
       i++;
       return { kind: 'string', start, end: i, value: JSON.parse(text.slice(start, i)) };
     }
@@ -26,14 +26,14 @@
         if (text[i] === '}') { i++; return { kind: 'object', start, end: i, props }; }
         for (;;) {
           ws(); const k = str(); ws();
-          if (text[i] !== ':') fail('esperava ":"');
+          if (text[i] !== ':') fail(FNF.t('cfg.j.colon'));
           i++;
           const v = value();
           props.push({ key: k.value, keyStart: k.start, keyEnd: k.end, value: v });
           ws();
           if (text[i] === ',') { i++; continue; }
           if (text[i] === '}') { i++; break; }
-          fail('esperava "," ou "}"');
+          fail(FNF.t('cfg.j.comma_brace'));
         }
         return { kind: 'object', start, end: i, props };
       }
@@ -44,7 +44,7 @@
           items.push(value()); ws();
           if (text[i] === ',') { i++; continue; }
           if (text[i] === ']') { i++; break; }
-          fail('esperava "," ou "]"');
+          fail(FNF.t('cfg.j.comma_bracket'));
         }
         return { kind: 'array', start, end: i, items };
       }
@@ -53,11 +53,11 @@
       if (m) { i += m[0].length; return { kind: 'number', start, end: i, value: parseFloat(m[0]), raw: m[0] }; }
       const lit = /^(true|false|null)/.exec(text.slice(i, i + 6));
       if (lit) { i += lit[0].length; return { kind: 'literal', start, end: i, value: lit[0] }; }
-      fail('valor inesperado');
+      fail(FNF.t('cfg.j.value'));
     }
     const rootNode = value();
     ws();
-    if (i < text.length) fail('conteúdo após o fim do JSON');
+    if (i < text.length) fail(FNF.t('cfg.j.trailing'));
     return rootNode;
   }
 
@@ -65,6 +65,7 @@
     return edits.slice().sort((a, b) => b.start - a.start).reduce((t, e) => t.slice(0, e.start) + e.text + t.slice(e.end), text);
   }
   const fmtNum = (x) => String(Number(x.toFixed(4)));
+  const fmtOff = (x) => String(Number(x.toFixed(2)));
   const prop = (node, key) => (node.kind === 'object' ? node.props.find((p) => p.key === key) : undefined);
 
   // nome de saída: troca só o nome-base (mantém pastas e extensão)
@@ -78,7 +79,7 @@
   /** opts: { invScale, rename:(base)=>base } */
   function adjustPsychConfig(text, opts) {
     const rootN = parseJSONSpans(text);
-    if (rootN.kind !== 'object') throw new Error('O JSON do personagem precisa ser um objeto.');
+    if (rootN.kind !== 'object') throw new Error(FNF.t('cfg.err.psychobj'));
     const edits = [], changes = [], warnings = [];
     const sc = prop(rootN, 'scale');
     if (opts.skipScale) {
@@ -88,14 +89,32 @@
       edits.push({ start: sc.value.start, end: sc.value.end, text: fmtNum(nv) });
       changes.push({ field: 'scale', before: sc.value.raw, after: fmtNum(nv) });
     } else if (!sc) {
-      if (!rootN.props.length) warnings.push('JSON vazio: não foi possível adicionar "scale".');
+      if (!rootN.props.length) warnings.push(FNF.t('cfg.warn.emptyjson'));
       else {
         const k0 = rootN.props[0].keyStart;
         const gap = text.slice(rootN.start + 1, k0);
         edits.push({ start: k0, end: k0, text: '"scale": ' + fmtNum(opts.invScale) + ',' + gap });
-        changes.push({ field: 'scale', before: '(ausente = 1)', after: fmtNum(opts.invScale) });
+        changes.push({ field: 'scale', before: FNF.t('cfg.change.absent'), after: fmtNum(opts.invScale) });
       }
-    } else warnings.push('O campo "scale" não é numérico; mantido como está.');
+    } else warnings.push(FNF.t('cfg.warn.scalenotnum'));
+    if (opts.offsetShift && !opts.skipScale) {
+      const an = prop(rootN, 'animations');
+      if (an && an.value.kind === 'array') {
+        an.value.items.forEach((it, idx) => {
+          const nm = prop(it, 'anim');
+          const label = 'animations[' + idx + ']' + (nm && nm.value.kind === 'string' ? ' (' + nm.value.value + ')' : '') + '.offsets';
+          const off = prop(it, 'offsets');
+          if (!off || off.value.kind !== 'array' || off.value.items.length < 2 || off.value.items.some((n) => n.kind !== 'number')) {
+            if (opts.offsetShift.dx || opts.offsetShift.dy) warnings.push(FNF.t('cfg.warn.nooffsets', { label }));
+            return;
+          }
+          const [a, b] = off.value.items;
+          const na = fmtOff(a.value + opts.offsetShift.dx), nb = fmtOff(b.value + opts.offsetShift.dy);
+          edits.push({ start: a.start, end: a.end, text: na }, { start: b.start, end: b.end, text: nb });
+          changes.push({ field: label, before: a.raw + ', ' + b.raw, after: na + ', ' + nb });
+        });
+      }
+    }
     const im = prop(rootN, 'image');
     if (im && im.value.kind === 'string' && opts.rename) {
       const nv = im.value.value.split(',').map((s) => renameRef(s.trim(), opts.rename)).join(',');
@@ -113,7 +132,7 @@
   /** opts: { invScale, rename, addScaleField } */
   function adjustLeatherConfig(text, opts) {
     const rootN = parseJSONSpans(text);
-    if (rootN.kind !== 'object') throw new Error('O config.json precisa ser um objeto.');
+    if (rootN.kind !== 'object') throw new Error(FNF.t('cfg.err.leatherobj'));
     const edits = [], changes = [], warnings = [];
     const numericScale = rootN.props.filter((p) => /scale/i.test(p.key) && p.value.kind === 'number');
     const applicable = numericScale.filter((p) => LEATHER_SCALE_KEY.test(p.key));
@@ -122,16 +141,16 @@
       edits.push({ start: p.value.start, end: p.value.end, text: fmtNum(nv) });
       changes.push({ field: p.key, before: p.value.raw, after: fmtNum(nv) });
     }
-    for (const p of opts.skipScale ? [] : numericScale) if (!applicable.includes(p)) warnings.push('Campo "' + p.key + '" parece uma escala, mas não foi alterado automaticamente.');
+    for (const p of opts.skipScale ? [] : numericScale) if (!applicable.includes(p)) warnings.push(FNF.t('cfg.warn.scalelike',{key:p.key}));
     if (!applicable.length && !opts.skipScale) {
       if (opts.addScaleField && rootN.props.length) {
         const k0 = rootN.props[0].keyStart;
         const gap = text.slice(rootN.start + 1, k0);
         edits.push({ start: k0, end: k0, text: '"scale": ' + fmtNum(opts.invScale) + ',' + gap });
-        changes.push({ field: 'scale', before: '(ausente)', after: fmtNum(opts.invScale) + ' (adicionado)' });
-        warnings.push('Campo "scale" adicionado por opção sua: confirme se a sua versão do Leather Engine o lê.');
+        changes.push({ field: 'scale', before: FNF.t('cfg.change.absent2'), after: FNF.t('cfg.change.added',{v:fmtNum(opts.invScale)}) });
+        warnings.push(FNF.t('cfg.warn.added'));
       } else {
-        warnings.push('Este config.json não tem campo de escala. O personagem aparecerá ' + fmtNum(opts.invScale) + '× MENOR no jogo, a menos que a sua versão da engine permita definir a escala (ou você ative "adicionar campo scale" no painel Avançado).');
+        warnings.push(FNF.t('cfg.warn.noscale',{factor:fmtNum(opts.invScale)}));
       }
     }
     if (opts.rename) {
@@ -155,7 +174,22 @@
         });
       }
     }
-    return { text: applyEdits(text, edits), changes, warnings };
+    const scaled = !opts.skipScale && (applicable.length > 0 || !!(opts.addScaleField && rootN.props.length));
+    return { text: applyEdits(text, edits), changes, warnings, scaled };
+  }
+
+  /** Soma (dx,dy) aos offsets de "nome x y" (compensa a mudança de escala), preservando o formato do arquivo. */
+  function shiftOffsetsText(text, dx, dy) {
+    const parts = text.split(/(\r?\n)/);
+    const changes = [];
+    for (let i = 0; i < parts.length; i += 2) {
+      const m = /^(\s*\S.*?)(\s+)(-?\d+(?:\.\d+)?)(\s+)(-?\d+(?:\.\d+)?)(\s*)$/.exec(parts[i]);
+      if (!m) continue;
+      const a = fmtOff(parseFloat(m[3]) + dx), b = fmtOff(parseFloat(m[5]) + dy);
+      parts[i] = m[1] + m[2] + a + m[4] + b + m[6];
+      changes.push({ field: m[1].trim(), before: m[3] + ' ' + m[5], after: a + ' ' + b });
+    }
+    return { text: parts.join(''), changes };
   }
 
   /** Multiplica os offsets de "nome x y" por factor, preservando ordem, separadores e fim de linha. */
@@ -200,23 +234,23 @@
       else if (e === 'xml') xmls.push(f);
       else if (e === 'json') jsons.push(f);
       else if (e === 'txt') txts.push(f);
-      else problems.push({ level: 'info', msg: 'Ignorado: ' + f.name });
+      else problems.push({ level: 'info', msg: FNF.t('files.ignored',{name:f.name}) });
     }
     const key = (f) => (dirOf(f.path || f.name) + baseOf(f.name)).toLowerCase();
     const atlases = [], usedX = new Set();
     for (const p of pngs) {
       let x = xmls.find((q) => key(q) === key(p)) || xmls.find((q) => !usedX.has(q) && baseOf(q.name).toLowerCase() === baseOf(p.name).toLowerCase());
-      if (!x) { problems.push({ level: 'error', msg: 'O PNG "' + p.name + '" não tem um XML com o mesmo nome.' }); continue; }
+      if (!x) { problems.push({ level: 'error', msg: FNF.t('files.nopng',{name:p.name}) }); continue; }
       usedX.add(x);
       atlases.push({ name: baseOf(p.name), dir: dirOf(p.path || p.name), pngName: p.name, xmlName: x.name, pngBytes: p.bytes, xmlText: FNF.textDecode(x.bytes) });
     }
-    for (const x of xmls) if (!usedX.has(x)) problems.push({ level: 'error', msg: 'O XML "' + x.name + '" não tem um PNG com o mesmo nome.' });
+    for (const x of xmls) if (!usedX.has(x)) problems.push({ level: 'error', msg: FNF.t('files.noxml',{name:x.name}) });
 
     const configs = [];
     for (const j of jsons) {
       const text = FNF.textDecode(j.bytes);
       const kind = detectConfigKind(text);
-      if (!kind) { problems.push({ level: 'warn', msg: '"' + j.name + '" não parece um config de personagem (Psych/Leather); ignorado.' }); continue; }
+      if (!kind) { problems.push({ level: 'warn', msg: FNF.t('files.notcfg',{name:j.name}) }); continue; }
       configs.push({ kind, name: j.name, dir: dirOf(j.path || j.name), text, bytes: j.bytes, offsets: null });
     }
     const leather = configs.filter((c) => c.kind === 'leather');
@@ -226,9 +260,9 @@
         txts.find((q) => !usedT.has(q) && dirOf(q.path || q.name) === c.dir);
       if (!t && leather.length === 1 && txts.length === 1) t = txts[0];
       if (t) { usedT.add(t); c.offsets = { name: t.name, bytes: t.bytes, text: FNF.textDecode(t.bytes) }; }
-      else problems.push({ level: 'warn', msg: 'Config Leather "' + c.name + '" sem offsets.txt: só o config.json será tratado.' });
+      else problems.push({ level: 'warn', msg: FNF.t('files.nooffsets',{name:c.name}) });
     }
-    for (const t of txts) if (!usedT.has(t)) problems.push({ level: 'info', msg: 'TXT ignorado: ' + t.name });
+    for (const t of txts) if (!usedT.has(t)) problems.push({ level: 'info', msg: FNF.t('files.txtignored',{name:t.name}) });
     return { atlases, configs, problems };
   }
 
@@ -276,5 +310,5 @@
     return FNF.concat([...locals, ...centrals, end]);
   }
 
-  Object.assign(FNF, { parseJSONSpans, adjustPsychConfig, adjustLeatherConfig, scaleOffsetsText, pairFiles, detectConfigKind, makeZip, baseOf, dirOf });
+  Object.assign(FNF, { parseJSONSpans, adjustPsychConfig, adjustLeatherConfig, scaleOffsetsText, shiftOffsetsText, pairFiles, detectConfigKind, makeZip, baseOf, dirOf });
 })(typeof self !== 'undefined' ? self : globalThis);

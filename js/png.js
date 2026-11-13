@@ -82,7 +82,7 @@
           }
           break;
         default:
-          throw new Error('PNG corrompido (filtro de linha inválido: ' + ft + ').');
+          throw new Error(FNF.t('png.err.filter',{ft}));
       }
       off += stride;
     }
@@ -134,7 +134,7 @@
 
   async function decodePNG(bytes) {
     if (!bytes || bytes.length < 8 || !PNG_SIG.every((v, i) => bytes[i] === v)) {
-      throw new Error('O arquivo não é um PNG válido.');
+      throw new Error(FNF.t('png.err.notpng'));
     }
     const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
     let pos = 8, ihdr = null, plte = null, trnsRaw = null;
@@ -152,15 +152,15 @@
       else if (type === 'IDAT') idat.push(body);
       else if (type === 'IEND') break;
     }
-    if (!ihdr) throw new Error('PNG sem cabeçalho IHDR.');
+    if (!ihdr) throw new Error(FNF.t('png.err.ihdr'));
     const { w, h, depth, ct, interlace } = ihdr;
     const chMap = { 0: 1, 2: 3, 3: 1, 4: 2, 6: 4 };
     const ch = chMap[ct];
-    if (!ch) throw new Error('Tipo de cor PNG não suportado: ' + ct);
-    if (ct === 3 && !plte) throw new Error('PNG indexado sem paleta.');
-    if (w * h > 400e6) throw new Error('Imagem grande demais.');
+    if (!ch) throw new Error(FNF.t('png.err.colortype',{ct}));
+    if (ct === 3 && !plte) throw new Error(FNF.t('png.err.palette'));
+    if (w * h > 400e6) throw new Error(FNF.t('png.err.huge'));
     const warnings = [];
-    if (depth === 16) warnings.push('PNG de 16 bits por canal: convertido para 8 bits.');
+    if (depth === 16) warnings.push(FNF.t('png.warn.16bit'));
     let trns = null;
     if (trnsRaw) {
       if (ct === 3) trns = trnsRaw;
@@ -437,12 +437,12 @@
       }
       const packed = packIndices(pal.indices, w, h, depth);
       filtered = filterRows(packed, Math.ceil((w * depth) / 8), h, 1);
-      kind = 'PNG-8 (' + n + ' cores)';
+      kind = FNF.t('png.kind.pal',{n});
     } else {
       ihdr[8] = 8; ihdr[9] = 6;
       parts.push(chunk('IHDR', ihdr));
       filtered = filterRows(rgba, w * 4, h, 4);
-      kind = 'RGBA 32 bits';
+      kind = FNF.t('png.kind.rgba');
     }
     parts.push(chunk('IDAT', await deflate(filtered)), chunk('IEND', new Uint8Array(0)));
     return { bytes: concat(parts), kind };

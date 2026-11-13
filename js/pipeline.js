@@ -6,7 +6,8 @@
   const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
 
   const DEFAULTS = {
-    scale: 1,               // 0.1 … 1
+    scale: 'auto',          // 'auto' (menor escala com boa qualidade) ou número 0.1 … 1
+    autoPsnr: 30,           // qualidade mínima (dB) usada pela escala automática
     filter: 'area',         // area | bilinear | lanczos
     compensateRounding: true,
     trim: true,
@@ -26,7 +27,8 @@
     suffix: '',
     validate: true,
     scaleOffsets: false,    // Leather: multiplica offsets.txt por S (avançado)
-    addScaleField: false,   // Leather: adiciona "scale" se o config não tiver
+    addScaleField: true,    // Leather: adiciona "scale" se o config não tiver
+    adjustOffsets: true,    // soma o deslocamento de centro aos offsets (mantém o alinhamento original)
   };
 
   // ---------------------------------------------------------------- helpers de bitmap
@@ -37,6 +39,49 @@
       out.set(img.data.subarray(s, s + f.w * 4), y * f.w * 4);
     }
     return out;
+  }
+
+  /** Bitmap lógico (upright) de um frame; frames rotacionados (rotated="true") são girados 90° anti-horário. */
+  function extractLogical(img, f) {
+    const raw = extract(img, f);
+    if (!f.rotated) return { w: f.w, h: f.h, data: raw };
+    const W = f.w, lw = f.h, lh = f.w;
+    const out = new Uint8Array(lw * lh * 4);
+    for (let y = 0; y < lh; y++) {
+      for (let x = 0; x < lw; x++) {
+        const s = (x * W + (W - 1 - y)) * 4, d = (y * lw + x) * 4;
+        out[d] = raw[s]; out[d + 1] = raw[s + 1]; out[d + 2] = raw[s + 2]; out[d + 3] = raw[s + 3];
+      }
+    }
+    return { w: lw, h: lh, data: out };
+  }
+
+  /** Escolhe a menor escala (0.1–1) em que reduzir e ampliar de volta ainda mantém o PSNR mínimo. */
+  function autoScale(entries, target) {
+    const uniq = [...new Set(entries.map((e) => e.bmp))].filter((b) => b.w * b.h >= 64);
+    if (!uniq.length) return 1;
+    uniq.sort((a, b) => b.w * b.h - a.w * a.h);
+    const pick = [];
+    const n = Math.min(14, uniq.length);
+    for (let i = 0; i < n; i++) pick.push(uniq[Math.floor((i * (uniq.length - 1)) / Math.max(1, n - 1))]);
+    const score = (S) => {
+      let sum = 0;
+      for (const b of pick) {
+        const nw = Math.max(1, Math.round(b.w * S)), nh = Math.max(1, Math.round(b.h * S));
+        const small = FNF.resizeRGBA(b.data, b.w, b.h, nw, nh, 'area');
+        const back = FNF.resizeRGBA(small, nw, nh, b.w, b.h, 'bilinear');
+        sum += Math.min(60, psnrAndDiff(b.data, back).psnr);
+      }
+      return sum / pick.length;
+    };
+    if (score(0.1) >= target) return 0.1;
+    if (score(1) < target) return 1;
+    let lo = 10, hi = 100; // inteiros em centésimos: lo falha, hi passa
+    while (hi - lo > 1) {
+      const mid = (lo + hi) >> 1;
+      if (score(mid / 100) >= target) hi = mid; else lo = mid;
+    }
+    return hi / 100;
   }
 
   function bboxAlpha(d, w, h, thr) {
@@ -131,13 +176,15 @@
     fw = fw === undefined ? f.fw : fw; fh = fh === undefined ? f.fh : fh;
     const out = new Uint8Array(fw * fh * 4);
     const ox = 0 - f.fx, oy = 0 - f.fy;
-    const x0 = Math.max(0, -ox), x1 = Math.min(f.w, fw - ox);
+    const lw = f.rotated ? f.h : f.w, lh = f.rotated ? f.w : f.h;
+    const lg = f.rotated ? extractLogical(img, f).data : null;
+    const x0 = Math.max(0, -ox), x1 = Math.min(lw, fw - ox);
     if (x1 <= x0) return out;
-    for (let yy = 0; yy < f.h; yy++) {
+    for (let yy = 0; yy < lh; yy++) {
       const dy = oy + yy;
       if (dy < 0 || dy >= fh) continue;
-      const s = ((f.y + yy) * img.width + f.x + x0) * 4;
-      out.set(img.data.subarray(s, s + (x1 - x0) * 4), (dy * fw + ox + x0) * 4);
+      const s = lg ? (yy * lw + x0) * 4 : ((f.y + yy) * img.width + f.x + x0) * 4;
+      out.set((lg || img.data).subarray(s, s + (x1 - x0) * 4), (dy * fw + ox + x0) * 4);
     }
     return out;
   }
@@ -161,19 +208,19 @@
   async function optimizeAtlas(input, userOpts, progress) {
     const t0 = now();
     const o = Object.assign({}, DEFAULTS, userOpts || {});
-    o.scale = Math.min(1, Math.max(0.1, Number(o.scale) || 1));
+    const autoMode = o.scale === 'auto';
+    o.scale = autoMode ? 1 : Math.min(1, Math.max(0.1, Number(o.scale) || 1));
     const P = async (stage, pct) => { if (progress) await progress(stage, pct); };
     const warnings = [];
 
-    await P('Lendo PNG e XML', 0);
+    await P(FNF.t('pl.stage.read'), 0);
     const img = await FNF.decodePNG(input.pngBytes);
     const sp = FNF.parseSparrow(input.xmlText);
     warnings.push(...img.warnings, ...sp.warnings);
     for (const f of sp.frames) {
-      if (f.rotated) throw new Error('O frame "' + f.name + '" é rotacionado (rotated="true"). Atlas com frames rotacionados ainda não são suportados: reexporte sem rotação.');
-      if (f.w <= 0 || f.h <= 0) throw new Error('O frame "' + f.name + '" tem largura/altura zero.');
+      if (f.w <= 0 || f.h <= 0) throw new Error(FNF.t('pl.err.zero', { name: f.name }));
       if (f.x < 0 || f.y < 0 || f.x + f.w > img.width || f.y + f.h > img.height) {
-        throw new Error('O frame "' + f.name + '" (' + f.x + ',' + f.y + ' ' + f.w + '×' + f.h + ') está fora dos limites do PNG (' + img.width + '×' + img.height + ').');
+        throw new Error(FNF.t('pl.err.bounds', { name: f.name, x: f.x, y: f.y, w: f.w, h: f.h, iw: img.width, ih: img.height }));
       }
     }
 
@@ -181,10 +228,10 @@
     const regionCache = new Map();
     let pixelsBefore = 0;
     const entries = sp.frames.map((f) => {
-      const k = f.x + ',' + f.y + ',' + f.w + ',' + f.h;
+      const k = f.x + ',' + f.y + ',' + f.w + ',' + f.h + (f.rotated ? 'r' : '');
       let bmp = regionCache.get(k);
       if (!bmp) {
-        bmp = { w: f.w, h: f.h, data: extract(img, f) };
+        bmp = extractLogical(img, f);
         regionCache.set(k, bmp);
         pixelsBefore += f.w * f.h;
       }
@@ -194,7 +241,7 @@
     const thr = Math.max(0, Math.min(254, o.alphaThreshold | 0));
     const lossy = (thr > 0 && (o.trim || o.aggressive)) || o.nearDedup || o.pngMode === 'quantize';
 
-    await P('Limpando pixels invisíveis', 8);
+    await P(FNF.t('pl.stage.clean'), 8);
     if (o.cleanInvisible || (o.aggressive && thr > 0)) {
       const seen = new Set();
       for (const e of entries) {
@@ -206,15 +253,24 @@
       }
     }
 
-    await P('Corte inteligente', 15);
+    await P(FNF.t('pl.stage.trim'), 15);
     if (o.trim) trimEntries(entries, thr);
 
-    await P('Deduplicando frames', 25);
+    await P(FNF.t('pl.stage.dedup'), 25);
     let uniqueAfterTrim = new Set(entries.map((e) => e.bmp)).size;
     if (o.dedup) uniqueAfterTrim = dedupe(entries, o.nearDedup ? o.nearTolerance : 0);
 
     // escala efetiva (compensa o arredondamento do tamanho do frame virtual)
     let Sx = 1, Sy = 1;
+    let refDims = null;
+    if (!o.forceScale && autoMode) o.scale = autoScale(entries, Number(o.autoPsnr) || 30);
+    {
+      const count = new Map();
+      for (const e of entries) { const k = e.fw + 'x' + e.fh; count.set(k, (count.get(k) || 0) + 1); }
+      let bk = null, bc = 0;
+      for (const [k, c] of count) if (c > bc) { bc = c; bk = k; }
+      refDims = bk.split('x').map(Number);
+    }
     if (o.forceScale) { Sx = o.forceScale.Sx; Sy = o.forceScale.Sy; }
     else if (o.scale < 1) {
       const count = new Map();
@@ -245,21 +301,21 @@
         }
         e.bmp = nb; e.px = x0; e.py = y0;
         e.fw = Math.max(1, Math.round(e.fw * Sx)); e.fh = Math.max(1, Math.round(e.fh * Sy));
-        if (++done % 25 === 0) await P('Redimensionando (' + Math.round(o.scale * 100) + '%)', 30 + (30 * done) / total);
+        if (++done % 25 === 0) await P(FNF.t('pl.stage.resize', { pct: Math.round(o.scale * 100) }), 30 + (30 * done) / total);
       }
-      await P('Cortando e deduplicando novamente', 62);
+      await P(FNF.t('pl.stage.retrim'), 62);
       if (o.trim) trimEntries(entries, thr);
       if (o.dedup) dedupe(entries, 0);
     }
     const uniq = [...new Set(entries.map((e) => e.bmp))];
 
-    await P('Empacotando atlas', 68);
+    await P(FNF.t('pl.stage.pack'), 68);
     const ex = Math.max(0, o.extrude | 0), pad = Math.max(0, o.padding | 0);
     const rects = uniq.map((b, i) => { b.pid = i; return { id: i, w: b.w + 2 * ex + pad, h: b.h + 2 * ex + pad }; });
     const plan = FNF.planAtlas(rects, { pow2: o.pow2, maxSize: o.maxSize });
     const W = o.pow2 ? plan.width : Math.max(1, plan.width - pad);
     const H = o.pow2 ? plan.height : Math.max(1, plan.height - pad);
-    if (Math.max(W, H) > 4096) warnings.push('O atlas ficou com ' + W + '×' + H + ' px: acima de 4096 px, GPUs de celulares fracos podem falhar. Considere reduzir a escala.');
+    if (Math.max(W, H) > 4096) warnings.push(FNF.t('pl.warn.bigatlas', { w: W, h: H }));
     const atlas = new Uint8Array(W * H * 4);
     for (const b of uniq) {
       const p = plan.placements.get(b.pid);
@@ -278,7 +334,7 @@
       }
     }
 
-    await P('Gerando PNG', 78);
+    await P(FNF.t('pl.stage.png'), 78);
     const enc = await FNF.encodePNG(atlas, W, H, { mode: o.pngMode, colors: o.colors, dither: o.dither });
     const outBase = input.name + (o.suffix || '');
     const pngName = outBase + '.png', xmlName = outBase + '.xml';
@@ -301,21 +357,21 @@
       uniqueAfterTrim,
       pngKind: enc.kind,
     };
-    if (stats.pngAfter > stats.pngBefore) warnings.push('O PNG de saída ficou maior que o original (' + stats.pngAfter + ' > ' + stats.pngBefore + ' bytes). Tente "PNG-8 quantizado" ou reduzir a escala.');
+    if (stats.pngAfter > stats.pngBefore) warnings.push(FNF.t('pl.warn.pngbigger', { after: stats.pngAfter, before: stats.pngBefore }));
 
     // ------------------------------------------------------------ validação
     const validation = { ok: true, errors: [], warnings: [], psnrMin: null, psnrAvg: null, frames: 0, exact: null, lossy };
     if (o.validate) {
-      await P('Validando resultado', 86);
+      await P(FNF.t('pl.stage.validate'), 86);
       const newImg = await FNF.decodePNG(enc.bytes);
       const newSp = FNF.parseSparrow(xmlText);
-      if (newSp.frames.length !== sp.frames.length) validation.errors.push('Quantidade de frames diferente do original.');
+      if (newSp.frames.length !== sp.frames.length) validation.errors.push(FNF.t('pl.val.count'));
       for (let i = 0; i < Math.min(newSp.frames.length, sp.frames.length); i++) {
-        if (newSp.frames[i].name !== sp.frames[i].name) { validation.errors.push('Nome/ordem de frame divergente: "' + sp.frames[i].name + '".'); break; }
+        if (newSp.frames[i].name !== sp.frames[i].name) { validation.errors.push(FNF.t('pl.val.order', { name: sp.frames[i].name })); break; }
       }
       const regs = new Map();
       for (const f of newSp.frames) {
-        if (f.x < 0 || f.y < 0 || f.x + f.w > newImg.width || f.y + f.h > newImg.height) { validation.errors.push('SubTexture "' + f.name + '" fora do PNG final.'); break; }
+        if (f.x < 0 || f.y < 0 || f.x + f.w > newImg.width || f.y + f.h > newImg.height) { validation.errors.push(FNF.t('pl.val.bounds', { name: f.name })); break; }
         regs.set(f.x + ',' + f.y + ',' + f.w + ',' + f.h, f);
       }
       const rl = [...regs.values()];
@@ -324,7 +380,7 @@
           for (let j = i + 1; j < rl.length; j++) {
             const a = rl[i], b = rl[j];
             if (a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h) {
-              validation.errors.push('Regiões sobrepostas no atlas: "' + a.name + '" e "' + b.name + '".');
+              validation.errors.push(FNF.t('pl.val.overlap', { a: a.name, b: b.name }));
               break outer;
             }
           }
@@ -339,7 +395,7 @@
         let A = composeFrame(img, f, f.fw, f.fh);
         const B = composeFrame(newImg, nf, nf.fw, nf.fh);
         if (exact) {
-          if (nf.fw !== f.fw || nf.fh !== f.fh) { validation.errors.push('Tamanho do frame virtual mudou em "' + f.name + '".'); continue; }
+          if (nf.fw !== f.fw || nf.fh !== f.fh) { validation.errors.push(FNF.t('pl.val.virtual', { name: f.name })); continue; }
           let bad = 0;
           for (let k = 0; k < A.length; k += 4) {
             const a1 = A[k + 3], a2 = B[k + 3];
@@ -356,19 +412,20 @@
       }
       validation.frames = cnt;
       if (exact && !lossy) {
-        if (mism > 0) validation.errors.push('Diferença de pixels em relação ao original (' + mism + ' pixels, primeiro frame: "' + worst + '"). Resultado deveria ser idêntico.');
+        if (mism > 0) validation.errors.push(FNF.t('pl.val.diff', { n: mism, name: worst }));
       } else {
         validation.psnrMin = psMin; validation.psnrAvg = cnt ? psSum / cnt : 99;
-        if (psMin < 28) validation.warnings.push('PSNR mínimo de ' + psMin.toFixed(1) + ' dB' + (worst ? ' (frame "' + worst + '")' : '') + ': há perda visível nesse frame.');
+        if (psMin < 28) validation.warnings.push(FNF.t('pl.val.psnr', { psnr: psMin.toFixed(1), frame: worst ? FNF.t('pl.val.psnrframe', { frame: worst }) : '' }));
       }
       validation.ok = validation.errors.length === 0;
     }
 
-    await P('Concluído', 100);
+    await P(FNF.t('pl.stage.done'), 100);
     return {
       name: input.name, dir: input.dir || '', outName: outBase, pngName, xmlName,
       pngBytes: enc.bytes, xmlText, atlas: { w: W, h: H },
-      Sx, Sy, seff: Math.sqrt(Sx * Sy), scale: o.scale,
+      Sx, Sy, seff: Math.sqrt(Sx * Sy), scale: o.scale, auto: autoMode && !o.forceScale,
+      ref: { fw0: refDims[0], fh0: refDims[1], fw1: Math.max(1, Math.round(refDims[0] * Sx)), fh1: Math.max(1, Math.round(refDims[1] * Sy)) },
       stats, validation, warnings, ms: Math.round(now() - t0),
     };
   }
@@ -398,13 +455,13 @@
     for (const c of configs) {
       const refs = configAtlasRefs(c).map((r) => r.toLowerCase());
       const found = refs.map((r) => byName.get(r)).filter(Boolean);
-      for (const r of refs) if (!byName.has(r)) problems.push({ level: 'warn', msg: 'O config "' + c.name + '" cita o atlas "' + r + '", que não foi enviado.' });
+      for (const r of refs) if (!byName.has(r)) problems.push({ level: 'warn', msg: FNF.t('pl.prob.cfgmissing', { cfg: c.name, atlas: r }) });
       if (found.length) {
         cfgPrimary.set(c, found[0]);
         for (const x of found.slice(1)) if (x !== found[0] && !primaryOf.has(x)) primaryOf.set(x, found[0]);
       } else {
         cfgPrimary.set(c, atlases[0] || null);
-        if (atlases.length) problems.push({ level: 'warn', msg: 'Não achei o atlas principal do config "' + c.name + '"; usei "' + atlases[0].name + '" para calcular a escala.' });
+        if (atlases.length) problems.push({ level: 'warn', msg: FNF.t('pl.prob.noprimary', { cfg: c.name, used: atlases[0].name }) });
       }
     }
     // primários/independentes primeiro, dependentes depois
@@ -430,10 +487,12 @@
       const seff = pr ? pr.seff : 1;
       const invScale = 1 / seff;
       const noScale = Math.abs(invScale - 1) < 1e-9;
-      const copts = { invScale: noScale ? 1 : invScale, rename, addScaleField: opts.addScaleField, skipScale: noScale };
+      const shift = opts.adjustOffsets && pr && pr.ref && !noScale ? { dx: (pr.ref.fw1 - pr.ref.fw0) / 2, dy: (pr.ref.fh1 - pr.ref.fh0) / 2 } : null;
+      const copts = { invScale: noScale ? 1 : invScale, rename, addScaleField: opts.addScaleField, skipScale: noScale, offsetShift: shift };
       const r = c.kind === 'psych' ? FNF.adjustPsychConfig(c.text, copts) : FNF.adjustLeatherConfig(c.text, copts);
       const out = {
         name: c.name, dir: c.dir, kind: c.kind, primary: prim ? prim.name : null, invScale,
+        shift: shift && (shift.dx || shift.dy) ? shift : null,
         changes: r.changes, warnings: r.warnings,
         before: c.text, text: r.text,
         bytes: r.text === c.text ? c.bytes : FNF.textEncode(r.text),
@@ -441,7 +500,8 @@
       };
       if (c.offsets) {
         let t = c.offsets.text, ch = [];
-        if (opts.scaleOffsets && !noScale) { const so = FNF.scaleOffsetsText(t, seff); t = so.text; ch = so.changes; }
+        if (shift && c.kind === 'leather' && r.scaled) { const so = FNF.shiftOffsetsText(t, shift.dx, shift.dy); t = so.text; ch = so.changes; }
+        else if (opts.scaleOffsets && !noScale) { const so = FNF.scaleOffsetsText(t, seff); t = so.text; ch = so.changes; }
         out.offsets = { name: c.offsets.name, before: c.offsets.text, text: t, changes: ch, bytes: t === c.offsets.text ? c.offsets.bytes : FNF.textEncode(t) };
       }
       cfgOut.push(out);
@@ -454,26 +514,27 @@
   const delta = (a, b) => { const d = a ? Math.round((b / a - 1) * 100) : 0; return (d > 0 ? '+' : '') + d + '%'; };
 
   function buildReportText(batch) {
-    const L = ['RELATÓRIO — FNF FunkinSheet Optimizer', ''];
+    const L = [FNF.t('rep.title'), ''];
     for (const r of batch.results) {
       const s = r.stats;
-      L.push('Atlas: ' + r.name + '  (escala ' + r.scale + ', escala efetiva ' + r.seff.toFixed(4) + ')');
+      L.push(FNF.t('rep.atlas', { name: r.name, scale: r.scale + (r.auto ? ' (auto)' : ''), eff: r.seff.toFixed(4) }));
       L.push('  PNG: ' + kb(s.pngBefore) + ' → ' + kb(s.pngAfter) + ' (' + delta(s.pngBefore, s.pngAfter) + ')  [' + s.pngKind + ']');
       L.push('  XML: ' + kb(s.xmlBefore) + ' → ' + kb(s.xmlAfter) + ' (' + delta(s.xmlBefore, s.xmlAfter) + ')');
-      L.push('  Atlas: ' + s.atlasBefore.w + '×' + s.atlasBefore.h + ' → ' + s.atlasAfter.w + '×' + s.atlasAfter.h);
-      L.push('  Frames: ' + s.framesTotal + ' total, ' + s.framesUnique + ' únicos, ' + s.framesDuplicated + ' duplicados');
-      L.push('  Validação: ' + (r.validation.ok ? 'OK' : 'FALHOU') + (r.validation.psnrMin != null ? ' (PSNR mín. ' + r.validation.psnrMin.toFixed(1) + ' dB)' : '') + ', ' + r.ms + ' ms');
-      for (const w of r.warnings.concat(r.validation.warnings)) L.push('  Aviso: ' + w);
-      for (const e of r.validation.errors) L.push('  ERRO: ' + e);
+      L.push(FNF.t('rep.atlasdim', { a: s.atlasBefore.w + '×' + s.atlasBefore.h, b: s.atlasAfter.w + '×' + s.atlasAfter.h }));
+      L.push(FNF.t('rep.frames', { total: s.framesTotal, unique: s.framesUnique, dup: s.framesDuplicated }));
+      L.push(FNF.t('rep.valid', { state: FNF.t(r.validation.ok ? 'rep.ok' : 'rep.failed'), psnr: r.validation.psnrMin != null ? FNF.t('rep.psnr', { v: r.validation.psnrMin.toFixed(1) }) : '', ms: r.ms }));
+      for (const w of r.warnings.concat(r.validation.warnings)) L.push('  ' + FNF.t('rep.warn') + w);
+      for (const e of r.validation.errors) L.push('  ' + FNF.t('rep.error') + e);
       L.push('');
     }
     for (const c of batch.configs) {
-      L.push('Config (' + c.kind + '): ' + c.name + '  → primário: ' + (c.primary || '?') + ', fator ' + c.invScale.toFixed(4));
+      L.push(FNF.t('rep.config', { kind: c.kind, name: c.name, atlas: c.primary || '?', factor: c.invScale.toFixed(4) }));
       for (const ch of c.changes) L.push('  ' + ch.field + ': ' + ch.before + ' → ' + ch.after);
-      for (const w of c.warnings) L.push('  Aviso: ' + w);
+      if (c.offsets) for (const ch of c.offsets.changes) L.push('  ' + c.offsets.name + ' · ' + ch.field + ': ' + ch.before + ' → ' + ch.after);
+      for (const w of c.warnings) L.push('  ' + FNF.t('rep.warn') + w);
       L.push('');
     }
-    for (const p of batch.problems) L.push((p.level === 'warn' ? 'Aviso: ' : '') + p.msg);
+    for (const p of batch.problems) L.push((p.level === 'warn' ? FNF.t('rep.warn') : '') + p.msg);
     return L.join('\n');
   }
 
@@ -488,7 +549,7 @@
       files.push({ path: c.dir + c.name, data: c.bytes, deflate: true });
       if (c.offsets) files.push({ path: c.dir + c.offsets.name, data: c.offsets.bytes, deflate: true });
     }
-    files.push({ path: 'relatorio.txt', data: FNF.textEncode(buildReportText(batch)), deflate: true });
+    files.push({ path: 'report.txt', data: FNF.textEncode(buildReportText(batch)), deflate: true });
     return files;
   }
 

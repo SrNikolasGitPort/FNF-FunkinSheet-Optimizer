@@ -36,7 +36,7 @@
   function parseSparrow(text) {
     if (text.charCodeAt(0) === 0xfeff) text = text.slice(1);
     const rootM = /<TextureAtlas\b((?:[^>"']|"[^"]*"|'[^']*')*)>/i.exec(text);
-    if (!rootM) throw new Error('XML inválido: não encontrei <TextureAtlas>. Esse arquivo é um atlas Sparrow?');
+    if (!rootM) throw new Error(FNF.t('sp.err.root'));
     const atlasAttrs = parseAttrs(rootM[1]);
     const re = /<SubTexture\b((?:[^>"']|"[^"]*"|'[^']*')*?)\/?>/gi;
     const frames = [];
@@ -46,20 +46,21 @@
     while ((m = re.exec(text))) {
       const a = parseAttrs(m[1]);
       const name = a.name;
-      if (name === undefined) throw new Error('Há um <SubTexture> sem atributo name.');
+      if (name === undefined) throw new Error(FNF.t('sp.err.noname'));
       const x = num(a.x), y = num(a.y), w = num(a.width), h = num(a.height);
-      if (![x, y, w, h].every(Number.isFinite)) throw new Error('SubTexture "' + name + '" com x/y/width/height inválidos.');
+      if (![x, y, w, h].every(Number.isFinite)) throw new Error(FNF.t('sp.err.rect',{name}));
       const hasFrame = a.frameX !== undefined || a.frameY !== undefined || a.frameWidth !== undefined || a.frameHeight !== undefined;
       const fx = a.frameX !== undefined ? num(a.frameX) : 0;
       const fy = a.frameY !== undefined ? num(a.frameY) : 0;
-      const fw = a.frameWidth !== undefined ? num(a.frameWidth) : w;
-      const fh = a.frameHeight !== undefined ? num(a.frameHeight) : h;
-      if (![fx, fy, fw, fh].every(Number.isFinite)) throw new Error('SubTexture "' + name + '" com frameX/frameY/frameWidth/frameHeight inválidos.');
-      if (seen.has(name)) warnings.push('Nome de frame duplicado no XML: "' + name + '".');
+      const rotated = a.rotated === 'true';
+      const fw = a.frameWidth !== undefined ? num(a.frameWidth) : (rotated ? h : w);
+      const fh = a.frameHeight !== undefined ? num(a.frameHeight) : (rotated ? w : h);
+      if (![fx, fy, fw, fh].every(Number.isFinite)) throw new Error(FNF.t('sp.err.frame',{name}));
+      if (seen.has(name)) warnings.push(FNF.t('sp.warn.dup',{name}));
       seen.add(name);
-      frames.push({ name, x, y, w, h, fx, fy, fw, fh, hasFrame, rotated: a.rotated === 'true' });
+      frames.push({ name, x, y, w, h, fx, fy, fw, fh, hasFrame, rotated });
     }
-    if (!frames.length) throw new Error('O XML não tem nenhum <SubTexture>.');
+    if (!frames.length) throw new Error(FNF.t('sp.err.none'));
     return { imagePath: atlasAttrs.imagePath || '', frames, warnings };
   }
 
