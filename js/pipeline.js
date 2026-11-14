@@ -6,6 +6,9 @@
   const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
 
   const DEFAULTS = {
+    format: 'auto',         // 'auto' (mesmo do original) | 'png' | 'astc'
+    astcBlock: 'auto',      // 'auto' ou '4x4' … '12x12'
+    astcQuality: 'normal',
     scale: 'auto',          // 'auto' (menor escala com boa qualidade) ou número 0.1 … 1
     autoPsnr: 30,           // qualidade mínima (dB) usada pela escala automática
     filter: 'area',         // area | bilinear | lanczos
@@ -39,6 +42,17 @@
       out.set(img.data.subarray(s, s + f.w * 4), y * f.w * 4);
     }
     return out;
+  }
+
+  /** Decodifica PNG ou ASTC (.astc) pelo cabeçalho. */
+  async function decodeAny(bytes) {
+    if (bytes.length > 4 && bytes[0] === 0x13 && bytes[1] === 0xab && bytes[2] === 0xa1 && bytes[3] === 0x5c) {
+      const r = FNF.decodeASTC(bytes);
+      return { width: r.width, height: r.height, data: r.data, warnings: r.badBlocks ? [FNF.t('astc.warn.bad', { n: r.badBlocks })] : [], astc: true, bw: r.bw, bh: r.bh };
+    }
+    const r = await FNF.decodePNG(bytes);
+    r.warnings = r.warnings || [];
+    return r;
   }
 
   /** Bitmap lógico (upright) de um frame; frames rotacionados (rotated="true") são girados 90° anti-horário. */
@@ -214,7 +228,7 @@
     const warnings = [];
 
     await P(FNF.t('pl.stage.read'), 0);
-    const img = await FNF.decodePNG(input.pngBytes);
+    const img = await decodeAny(input.pngBytes);
     const sp = FNF.parseSparrow(input.xmlText);
     warnings.push(...img.warnings, ...sp.warnings);
     for (const f of sp.frames) {
@@ -239,7 +253,7 @@
     });
     const total = entries.length;
     const thr = Math.max(0, Math.min(254, o.alphaThreshold | 0));
-    const lossy = (thr > 0 && (o.trim || o.aggressive)) || o.nearDedup || o.pngMode === 'quantize';
+    const lossy = (thr > 0 && (o.trim || o.aggressive)) || o.nearDedup || o.pngMode === 'quantize' || ((o.format === 'astc' || ((!o.format || o.format === 'auto') && img.astc)));
 
     await P(FNF.t('pl.stage.clean'), 8);
     if (o.cleanInvisible || (o.aggressive && thr > 0)) {
@@ -335,9 +349,15 @@
     }
 
     await P(FNF.t('pl.stage.png'), 78);
-    const enc = await FNF.encodePNG(atlas, W, H, { mode: o.pngMode, colors: o.colors, dither: o.dither });
+    const wantAstc = o.format === 'astc' || ((!o.format || o.format === 'auto') && img.astc);
+    let enc;
+    if (wantAstc) {
+      let [abw, abh] = (o.astcBlock && o.astcBlock !== 'auto' ? o.astcBlock : (img.astc ? img.bw + 'x' + img.bh : '6x6')).split('x').map(Number);
+      const bytes = FNF.encodeASTC(atlas, W, H, { bw: abw, bh: abh, quality: o.astcQuality || 'normal' });
+      enc = { bytes, kind: 'ASTC ' + abw + '×' + abh };
+    } else enc = await FNF.encodePNG(atlas, W, H, { mode: o.pngMode, colors: o.colors, dither: o.dither });
     const outBase = input.name + (o.suffix || '');
-    const pngName = outBase + '.png', xmlName = outBase + '.xml';
+    const pngName = outBase + (wantAstc ? '.astc' : '.png'), xmlName = outBase + '.xml';
     const outFrames = entries.map((e) => ({
       name: e.name, x: e.bmp.ax, y: e.bmp.ay, w: e.bmp.w, h: e.bmp.h, fx: 0 - e.px, fy: 0 - e.py, fw: e.fw, fh: e.fh,
     }));
@@ -363,7 +383,7 @@
     const validation = { ok: true, errors: [], warnings: [], psnrMin: null, psnrAvg: null, frames: 0, exact: null, lossy };
     if (o.validate) {
       await P(FNF.t('pl.stage.validate'), 86);
-      const newImg = await FNF.decodePNG(enc.bytes);
+      const newImg = await decodeAny(enc.bytes);
       const newSp = FNF.parseSparrow(xmlText);
       if (newSp.frames.length !== sp.frames.length) validation.errors.push(FNF.t('pl.val.count'));
       for (let i = 0; i < Math.min(newSp.frames.length, sp.frames.length); i++) {

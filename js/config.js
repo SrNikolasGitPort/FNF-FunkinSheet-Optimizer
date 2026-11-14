@@ -230,7 +230,7 @@
     const pngs = [], xmls = [], jsons = [], txts = [], problems = [];
     for (const f of files) {
       const e = extOf(f.name);
-      if (e === 'png') pngs.push(f);
+      if (e === 'png' || e === 'astc') pngs.push(f);
       else if (e === 'xml') xmls.push(f);
       else if (e === 'json') jsons.push(f);
       else if (e === 'txt') txts.push(f);
