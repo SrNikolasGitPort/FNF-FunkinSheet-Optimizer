@@ -169,3 +169,16 @@ footer { max-width: 1040px; margin: 0 auto; padding: 0 16px 40px; color: var(--m
   .toolbar select { min-width: 0; flex: 1 1 100%; }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+/* v2: modos, idioma, compressão */
+.top-right{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.modes{display:flex;gap:8px;max-width:1100px;margin:14px auto 0;padding:0 16px}
+.modes button{flex:1;padding:12px 14px;border-radius:12px;border:1px solid var(--line,#ffffff22);background:transparent;color:inherit;font:inherit;font-weight:600;cursor:pointer}
+.modes button[aria-selected=true]{background:var(--accent,#ff4fa3);border-color:transparent;color:#fff}
+main[hidden]{display:none}
+.c-list{display:grid;gap:10px;margin-top:14px}
+.c-item{display:grid;grid-template-columns:72px minmax(0,1fr) auto;gap:12px;align-items:center;padding:10px;border:1px solid #ffffff1f;border-radius:12px}
+.c-item img{width:72px;height:72px;object-fit:contain;border-radius:8px;background:repeating-conic-gradient(#ffffff14 0 25%,#0000 0 50%) 0 0/14px 14px}
+.c-item .nm{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.c-item a.btn{white-space:nowrap}
+@media (max-width:560px){.c-item{grid-template-columns:56px minmax(0,1fr)}.c-item a.btn{grid-column:1/-1}}

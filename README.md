@@ -1,80 +1,74 @@
 # FNF FunkinSheet Optimizer
 
-Site que otimiza sprites de **Friday Night Funkin'** (atlas Sparrow **PNG + XML**) de forma rápida e sem erros, e ajusta o config do personagem para ele continuar **do mesmo tamanho e alinhado** no jogo.
+A site that optimizes **Friday Night Funkin'** sprite atlases (Sparrow **PNG or ASTC + XML**) and keeps the character looking and aligned exactly like the original. It also has a general **image compressor**. Everything runs **100% in your browser** (nothing is uploaded) and works offline once loaded.
 
-Tudo roda **100% no navegador** (nenhum arquivo é enviado para servidor) e funciona offline depois de carregado.
+Live: https://srnikolasgitport.github.io/FNF-FunkinSheet-Optimizer/ — the interface is in **English by default**, with a PT button for Portuguese.
 
-## O que faz
+## Optimize atlases
 
-- **Corte inteligente**: remove as bordas transparentes de cada frame e ajusta `frameX/frameY` (o frame virtual original é preservado).
-- **Escala de 0.1 a 1.0** (passo 0.01): cada frame é reduzido com amostragem em subpixel (filtros Área, Bilinear ou Lanczos3, em alpha pré-multiplicado). A escala efetiva é compensada pelo arredondamento do frame virtual.
-- **Deduplicação**: frames idênticos passam a apontar para a mesma região do atlas (opcional: "quase idênticos", com tolerância).
-- **Empacotador MaxRects** com busca do menor atlas, espaçamento e extrusão de bordas configuráveis, opção de potência de 2 e tamanho máximo.
-- **PNG menor**: filtros adaptativos + deflate; paleta exata (PNG-8 sem perdas) quando o atlas tem até 256 cores; PNG-8 quantizado opcional (median-cut, com dithering).
-- **Validação automática**: o resultado é decodificado de novo e comparado com o original. Com escala 1.0 e opções sem perdas, precisa ser **idêntico pixel a pixel**; com escala menor mostra o PSNR. Se a validação falhar, o site pede confirmação antes de baixar o ZIP.
-- **Ajuste do config do personagem** (opcional), preservando a formatação original do arquivo (só os trechos necessários mudam):
-  - **Psych Engine** (qualquer versão): `personagem.json`, campo `scale` = `scale / S`.
-  - **Leather Engine 0.5.0 – 1.1.9**: `config.json` + `offsets.txt`, incluindo `imagePath` e `extraSheets` (todos os atlas do personagem usam a **mesma** escala efetiva).
-- **Prévias**: visualizador de atlas (zoom, caixas, nomes ao passar o mouse) e player de animações com **original × otimizado** lado a lado ou sobrepostos, aplicando fps e offsets do config.
-- **ZIP** com PNG, XML, configs e `relatorio.txt`, mantendo a estrutura de pastas.
+1. Drop the PNG/ASTC + XML (and optionally the Psych Engine JSON, or Leather Engine `config.json` + `offsets.txt`), or the whole character folder. **Load example (BF)** lets you try it without files.
+2. Pick a profile (Best quality / Balanced / Smallest) and press **Optimize**. Size is **automatic by default**: the optimizer finds the smallest scale that still keeps measured quality (PSNR) — no target size to guess. You can still force a manual scale (0.1–1).
+3. Check the summary, atlas viewer and animation preview, then **Download all (.zip)**.
 
-## Como usar
+What it does:
 
-1. Arraste o PNG + XML (e, se quiser, o JSON do Psych ou `config.json` + `offsets.txt` do Leather), ou a pasta inteira do personagem. Dá para testar sem arquivos com **Carregar exemplo (BF)**.
-2. Escolha a escala e o perfil (Máxima qualidade / Equilibrado / Máxima leveza).
-3. Clique em **Otimizar**, confira o Resumo, as prévias e o diff dos configs.
-4. **Baixar tudo (.zip)**.
+- **Smart crop** of transparent borders (adjusts `frameX/frameY`, keeping the virtual frame).
+- **Automatic scale**, or manual 0.1–1, with sub-pixel resampling (Area / Bilinear / Lanczos3, premultiplied alpha) and rounding compensation.
+- **`rotated="true"` support**: rotated frames are read correctly and written back upright.
+- **Deduplication** (identical, and optionally near-identical frames) and a **MaxRects packer**.
+- **Smaller images**: adaptive PNG filters, exact palette PNG-8 when possible, optional quantized PNG-8.
+- **ASTC**: reads `.astc` atlases (V-Slice style) and can write `.astc` (block sizes 4×4 … 12×12). The decoder was verified block-by-block against the browser's own GPU ASTC decoder. Limitation: blocks that use multiple partitions or HDR are not supported (reported as warnings).
+- **Character config adjustment** that fixes **scale and offsets** so the character is aligned like the original. If the sprite is drawn at `1/S` size, the offsets of every animation are also shifted by half the change of the virtual frame size, `off' = off + (C' − C)`, where `C` is the centre of the reference frame (Flixel scales around it). The animation preview simulates the game's positioning using the original and the new config.
+  - **Psych Engine** (any version): `scale` and each `animations[].offsets`.
+  - **Leather Engine 0.5.0 – 1.1.9**: `config.json` (adds a `scale` field if missing, optional) and `offsets.txt`; `imagePath` / `extraSheets` use the same effective scale.
+  - Original formatting is preserved (only the necessary values change).
+- **Validation**: the result is decoded again and compared with the original (pixel-exact when lossless; PSNR otherwise).
 
-## Como o config é ajustado
+## Compress images
 
-Se o sprite foi reduzido por um fator `S`, o personagem precisa ser desenhado `1/S` maior para ficar igual no jogo:
+A separate tab for any PNG / JPG / WebP / ASTC: choose **Lossless**, **High**, **Balanced** or **Smallest**. It searches for the smallest file whose measured quality (PSNR on premultiplied alpha) stays above the target — palette size for PNG, quality for WebP/JPEG, block size for ASTC. Invisible pixels are cleaned, and the original is kept if it can't be improved. Note: ASTC saves GPU memory (fixed size per block) but is often bigger on disk than a PNG with lots of transparency.
 
-| Engine | O que muda | O que NÃO muda |
-| --- | --- | --- |
-| Psych | `scale` (e `image` se você usar sufixo) | `offsets`, `position`, `camera_position`, `fps`, `indices` |
-| Leather | `scale`, se existir; `imagePath`/`extraSheets` com sufixo | `offsets.txt` (byte a byte), flips, cores, animações |
+## Notes
 
-Pontos importantes:
+- Offsets are computed from the *dominant* frame size, which is what the engine uses as the scaling origin in practice. Always eyeball the Animations tab for characters with very unusual frames.
+- The atlas must fit in the chosen max size (up to 16384 px); there is no multi-page output.
+- PNG uses the browser's native deflate (`CompressionStream`), which is not as strong as zopfli.
+- When cropping, the XML usually **grows** (adds `frameX/frameY`); the image savings far outweigh it.
 
-- Os offsets das animações ficam em pixels de tela e **não** são divididos por `S`. Há uma opção avançada para multiplicá-los no `offsets.txt` caso a sua engine se comporte diferente.
-- O `config.json` do Leather dos exemplos **não tem campo de escala**. O site **não inventa** esse campo: avisa que o personagem ficará menor e oferece a opção avançada "adicionar `scale`" (confirme se a sua versão da engine lê esse campo).
-- `animation_name` é o prefixo dos frames no XML: os nomes dos frames nunca são alterados.
+## Run / host
 
-## Limitações conhecidas
+Static site: open `index.html`, or publish with GitHub Pages (a workflow is included). Processing runs in a Web Worker and falls back to the main thread when workers are blocked (e.g. `file://`).
 
-- Frames **rotacionados** (`rotated="true"`) não são suportados: o site recusa o atlas com uma mensagem clara, em vez de arriscar corromper.
-- O atlas final precisa caber no tamanho máximo escolhido (até 16384 px); não há divisão em várias páginas.
-- O PNG usa o deflate nativo do navegador (`CompressionStream`), que não tem o nível máximo de compressão de ferramentas como zopfli.
-- Ao cortar frames, o XML costuma **crescer** (acrescenta `frameX/frameY`); o ganho no PNG compensa.
+## Tests
 
-## Rodar / hospedar
-
-É um site estático. Abra o `index.html` direto no navegador, ou publique no **GitHub Pages** (Settings → Pages → Deploy from a branch → `main` / root).
-
-Em servidor, o processamento roda em um Web Worker. Se o navegador bloquear workers (por exemplo, ao abrir via `file://`), ele cai automaticamente para a thread principal.
-
-## Testes
-
-Precisam do Node 18+ (e, só para regenerar os arquivos de teste, Python com Pillow e numpy):
+Node 18+:
 
 ```bash
-node tests/png.test.js        # decoder/encoder PNG (paleta, cinza, 16 bits, Adam7, quantização)
-node tests/pipeline.test.js   # pipeline, escalas, dedup, configs Psych/Leather, ZIP
+node tests/png.test.js        # PNG decoder/encoder
+node tests/pipeline.test.js   # pipeline, auto scale, rotated, offsets, configs, ZIP
+node tests/astc.test.js       # ASTC encode/decode round trips and pipeline
+node tests/compress.test.js   # image compressor
 ```
 
-## Estrutura
+## Português (resumo)
+
+Site que otimiza atlas de sprites do FNF (PNG ou ASTC + XML) e ajusta **scale e offsets** do personagem (Psych e Leather) para ficar alinhado como o original. Suporta `rotated="true"`, escala automática (sem alvo de tamanho), leitura/gravação de ASTC e uma aba **Compress images** para comprimir imagens mantendo a qualidade. Use o botão **PT** no topo para a interface em português.
+
+## Structure
 
 ```
 index.html, css/style.css
-js/png.js        decoder/encoder PNG, quantização
-js/sparrow.js    parser/escritor do XML Sparrow
-js/resample.js   redimensionamento em subpixel
+js/i18n.js       EN/PT strings
+js/png.js        PNG decoder/encoder, quantization
+js/astc.js       ASTC decoder/encoder
+js/sparrow.js    Sparrow XML parser/writer
+js/resample.js   sub-pixel resizing
 js/pack.js       MaxRects
-js/config.js     edição de JSON por trechos, Psych/Leather, pareamento de arquivos, ZIP
-js/pipeline.js   pipeline de um atlas e lote com configs
-js/worker.js     execução fora da thread da interface
-js/demo.js       personagem de exemplo
-js/app.js        interface
-examples/BF/     config.json + offsets.txt de exemplo (Leather)
-tests/           testes automáticos
+js/config.js     JSON edit-by-spans, Psych/Leather, file pairing, ZIP
+js/pipeline.js   single-atlas pipeline and batch with configs
+js/compress.js   image compressor
+js/worker.js     off-main-thread execution
+js/demo.js       example character
+js/app.js        UI
+tests/           automated tests
 ```

@@ -1,11 +1,11 @@
 <!doctype html>
-<html lang="pt-BR">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="dark">
 <title>FunkinSheet Optimizer</title>
-<meta name="description" content="Otimize sprites de Friday Night Funkin' (PNG + XML Sparrow) com corte inteligente, escala 0.1–1, deduplicação e ajuste do config do personagem (Psych e Leather Engine).">
+<meta name="description" content="Optimize Friday Night Funkin' sprite atlases (PNG/ASTC + Sparrow XML): smart crop, automatic scale, deduplication, rotated frames and character config scale + offset adjustment (Psych and Leather Engine). Also compresses images.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23ff4fa3'/%3E%3Ctext x='32' y='45' font-size='36' text-anchor='middle' fill='white'%3E%E2%99%AA%3C/text%3E%3C/svg%3E">
 <link rel="stylesheet" href="css/style.css">
 </head>
@@ -15,150 +15,159 @@
     <span class="logo" aria-hidden="true">♪</span>
     <div>
       <h1>FunkinSheet Optimizer</h1>
-      <p>Sprites de FNF mais leves, com o alinhamento do personagem intacto.</p>
+      <p data-pt="Sprites de FNF mais leves, com o alinhamento do personagem intacto.">Lighter FNF sprites, with the character alignment kept intact.</p>
     </div>
   </div>
-  <span class="badge" title="Os arquivos nunca saem do seu navegador">100% local · sem upload</span>
+  <div class="top-right">
+    <div class="seg" role="group" aria-label="Language" id="lang-seg"><button type="button" data-lang="en" aria-pressed="true">EN</button><button type="button" data-lang="pt" aria-pressed="false">PT</button></div>
+    <span class="badge" data-pt="100% local · sem upload" data-pt-title="Os arquivos nunca saem do seu navegador" title="Your files never leave your browser">100% local · no upload</span>
+  </div>
 </header>
 
-<main>
-  <!-- 1. ARQUIVOS -->
+<nav class="modes" role="tablist" aria-label="Mode">
+  <button role="tab" id="mode-opt" aria-selected="true" data-pt="Otimizar atlas">Optimize atlases</button>
+  <button role="tab" id="mode-cmp" aria-selected="false" data-pt="Comprimir imagens">Compress images</button>
+</nav>
+
+<main id="view-opt">
   <section class="card" id="sec-files" aria-labelledby="h-files">
-    <h2 id="h-files"><span class="n">1</span>Arquivos</h2>
-    <div id="drop" class="drop" tabindex="0" role="button" aria-label="Soltar arquivos aqui ou clicar para escolher">
-      <strong>Arraste os arquivos (ou a pasta do personagem) para cá</strong>
-      <span>PNG + XML do atlas Sparrow. Opcional: JSON do Psych Engine ou config.json + offsets.txt do Leather Engine.</span>
+    <h2 id="h-files"><span class="n">1</span><span data-pt="Arquivos">Files</span></h2>
+    <div id="drop" class="drop" tabindex="0" role="button">
+      <strong data-pt="Arraste os arquivos (ou a pasta do personagem) para cá">Drop your files (or the character folder) here</strong>
+      <span data-pt="Atlas PNG ou ASTC + XML Sparrow. Opcional: JSON do Psych Engine ou config.json + offsets.txt do Leather Engine.">Atlas PNG or ASTC + Sparrow XML. Optional: Psych Engine JSON, or Leather Engine config.json + offsets.txt.</span>
       <div class="row">
-        <button type="button" id="btn-pick" class="btn">Escolher arquivos</button>
-        <button type="button" id="btn-folder" class="btn ghost">Escolher pasta</button>
-        <button type="button" id="btn-demo" class="btn ghost">Carregar exemplo (BF)</button>
+        <button type="button" id="btn-pick" class="btn" data-pt="Escolher arquivos">Choose files</button>
+        <button type="button" id="btn-folder" class="btn ghost" data-pt="Escolher pasta">Choose folder</button>
+        <button type="button" id="btn-demo" class="btn ghost" data-pt="Carregar exemplo (BF)">Load example (BF)</button>
       </div>
     </div>
-    <input type="file" id="in-files" multiple hidden accept=".png,.xml,.json,.txt">
+    <input type="file" id="in-files" multiple hidden accept=".png,.astc,.xml,.json,.txt">
     <input type="file" id="in-folder" hidden webkitdirectory multiple>
     <div id="file-summary" class="summary" aria-live="polite"></div>
   </section>
 
-  <!-- 2. OPÇÕES -->
   <section class="card" id="sec-opts" aria-labelledby="h-opts">
-    <h2 id="h-opts"><span class="n">2</span>Otimização</h2>
-
-    <div class="scale-box">
-      <div class="scale-head">
-        <label for="o-scale">Escala do sprite</label>
-        <output id="scale-val" for="o-scale">1.00×</output>
-      </div>
-      <input type="range" id="o-scale" data-opt="scale" min="0.1" max="1" step="0.01" value="1">
-      <div class="chips" id="scale-presets" role="group" aria-label="Escalas rápidas">
-        <button type="button" data-s="1">1.0</button><button type="button" data-s="0.75">0.75</button><button type="button" data-s="0.5">0.5</button>
-        <button type="button" data-s="0.35">0.35</button><button type="button" data-s="0.25">0.25</button><button type="button" data-s="0.1">0.1</button>
-      </div>
-      <p class="hint">Cada frame é reduzido e o config do personagem é compensado (<code>scale × 1/S</code>) para ele aparecer do mesmo tamanho no jogo.</p>
-    </div>
-
+    <h2 id="h-opts"><span class="n">2</span><span data-pt="Otimização">Settings</span></h2>
     <div class="grid">
       <div class="field">
-        <label for="o-preset">Perfil</label>
+        <label for="o-preset" data-pt="Perfil">Profile</label>
         <select id="o-preset">
-          <option value="quality">Máxima qualidade (sem perdas)</option>
-          <option value="balanced">Equilibrado</option>
-          <option value="light">Máxima leveza (mobile)</option>
-          <option value="custom" hidden>Personalizado</option>
+          <option value="quality" data-pt="Máxima qualidade">Best quality</option>
+          <option value="balanced" data-pt="Equilibrado">Balanced</option>
+          <option value="light" data-pt="Máxima leveza (mobile)">Smallest size (mobile)</option>
+          <option value="custom" hidden data-pt="Personalizado">Custom</option>
         </select>
       </div>
       <div class="field">
-        <label for="o-filter">Filtro de redução</label>
-        <select id="o-filter" data-opt="filter">
-          <option value="area">Área (recomendado)</option>
-          <option value="lanczos">Lanczos3 (mais nítido)</option>
-          <option value="bilinear">Bilinear (mais suave)</option>
+        <label for="o-scalemode" data-pt="Tamanho dos sprites">Sprite size</label>
+        <select id="o-scalemode">
+          <option value="auto" data-pt="Automático (o menor possível com boa qualidade)">Automatic (smallest that still looks good)</option>
+          <option value="manual" data-pt="Escala manual">Manual scale</option>
         </select>
       </div>
+      <div class="field" id="scale-box" hidden>
+        <div class="scale-head"><label for="o-scale" data-pt="Escala">Scale</label><output id="scale-val" for="o-scale">1.00×</output></div>
+        <input type="range" id="o-scale" data-opt="scale" min="0.1" max="1" step="0.01" value="1">
+        <div class="chips" id="scale-presets" role="group">
+          <button type="button" data-s="1">1.0</button><button type="button" data-s="0.75">0.75</button><button type="button" data-s="0.5">0.5</button>
+          <button type="button" data-s="0.35">0.35</button><button type="button" data-s="0.25">0.25</button><button type="button" data-s="0.1">0.1</button>
+        </div>
+      </div>
+      <div class="field">
+        <label for="o-format" data-pt="Formato de saída">Output format</label>
+        <select id="o-format" data-opt="format">
+          <option value="auto" data-pt="Igual ao original">Same as the original</option>
+          <option value="png">PNG</option>
+          <option value="astc">ASTC</option>
+        </select>
+      </div>
+      <div class="field" id="astc-box" hidden>
+        <label for="o-astcblock" data-pt="Bloco ASTC">ASTC block size</label>
+        <select id="o-astcblock" data-opt="astcBlock"></select>
+      </div>
     </div>
-
     <div class="toggles">
-      <label class="tog"><input type="checkbox" data-opt="trim"><span><b>Corte inteligente</b> remove as bordas transparentes de cada frame e ajusta frameX/frameY</span></label>
-      <label class="tog"><input type="checkbox" data-opt="dedup"><span><b>Deduplicação</b> frames idênticos passam a dividir a mesma região do atlas</span></label>
-      <label class="tog"><input type="checkbox" data-opt="cleanInvisible"><span><b>Limpar pixels invisíveis</b> zera o RGB dos pixels 100% transparentes (PNG menor, visual idêntico)</span></label>
+      <label class="tog"><input type="checkbox" data-opt="adjustOffsets"><span data-pt="<b>Manter o personagem alinhado</b> ajusta o scale e os offsets do config para ficar igual ao original"><b>Keep the character aligned</b> adjusts the config scale and offsets so it looks like the original</span></label>
     </div>
 
     <details class="adv">
-      <summary>Avançado</summary>
+      <summary data-pt="Mais opções">More options</summary>
       <div class="grid">
-        <div class="field"><label for="o-thr">Limite de alpha do corte (0–32)</label><input type="number" id="o-thr" data-opt="alphaThreshold" min="0" max="32" step="1"><small>0 = só corta o que é totalmente transparente (sem perdas).</small></div>
-        <label class="tog compact"><input type="checkbox" data-opt="aggressive"><span><b>Corte agressivo</b> zera pixels com alpha abaixo do limite</span></label>
-        <label class="tog compact"><input type="checkbox" data-opt="nearDedup"><span><b>Quase idênticos</b> junta frames com diferença mínima (perde detalhes)</span></label>
-        <div class="field"><label for="o-neartol">Tolerância (quase idênticos)</label><input type="number" id="o-neartol" data-opt="nearTolerance" min="1" max="16" step="1"></div>
-        <div class="field"><label for="o-pad">Espaçamento entre frames (px)</label><input type="number" id="o-pad" data-opt="padding" min="0" max="8" step="1"></div>
-        <div class="field"><label for="o-ext">Extrusão das bordas (px)</label><input type="number" id="o-ext" data-opt="extrude" min="0" max="4" step="1"><small>Evita linhas entre frames ao renderizar.</small></div>
-        <div class="field"><label for="o-max">Tamanho máximo do atlas</label>
+        <div class="field"><label for="o-filter" data-pt="Filtro de redução">Downscale filter</label>
+          <select id="o-filter" data-opt="filter"><option value="area" data-pt="Área (recomendado)">Area (recommended)</option><option value="lanczos" data-pt="Lanczos3 (mais nítido)">Lanczos3 (sharper)</option><option value="bilinear" data-pt="Bilinear (mais suave)">Bilinear (softer)</option></select></div>
+        <div class="field"><label for="o-psnr" data-pt="Qualidade mínima da escala automática (dB)">Auto-scale minimum quality (dB)</label><input type="number" id="o-psnr" data-opt="autoPsnr" min="20" max="50" step="1"><small data-pt="Maior = mantém mais detalhes (escala maior).">Higher = keeps more detail (larger scale).</small></div>
+        <label class="tog compact"><input type="checkbox" data-opt="trim"><span data-pt="<b>Corte inteligente</b> remove as bordas transparentes"><b>Smart crop</b> removes transparent borders</span></label>
+        <label class="tog compact"><input type="checkbox" data-opt="dedup"><span data-pt="<b>Deduplicação</b> frames idênticos dividem a mesma região"><b>Deduplication</b> identical frames share one region</span></label>
+        <label class="tog compact"><input type="checkbox" data-opt="cleanInvisible"><span data-pt="<b>Limpar pixels invisíveis</b> zera o RGB dos pixels transparentes"><b>Clean invisible pixels</b> zeroes RGB of transparent pixels</span></label>
+        <div class="field"><label for="o-thr" data-pt="Limite de alpha do corte (0–32)">Crop alpha threshold (0–32)</label><input type="number" id="o-thr" data-opt="alphaThreshold" min="0" max="32" step="1"><small data-pt="0 = só corta o que é totalmente transparente (sem perdas).">0 = only crops fully transparent pixels (lossless).</small></div>
+        <label class="tog compact"><input type="checkbox" data-opt="aggressive"><span data-pt="<b>Corte agressivo</b> zera pixels com alpha abaixo do limite"><b>Aggressive crop</b> clears pixels below the threshold</span></label>
+        <label class="tog compact"><input type="checkbox" data-opt="nearDedup"><span data-pt="<b>Quase idênticos</b> junta frames quase iguais (perde detalhes)"><b>Near-duplicates</b> merges almost identical frames (loses detail)</span></label>
+        <div class="field"><label for="o-neartol" data-pt="Tolerância (quase idênticos)">Near-duplicate tolerance</label><input type="number" id="o-neartol" data-opt="nearTolerance" min="1" max="16" step="1"></div>
+        <div class="field"><label for="o-pad" data-pt="Espaçamento entre frames (px)">Frame padding (px)</label><input type="number" id="o-pad" data-opt="padding" min="0" max="8" step="1"></div>
+        <div class="field"><label for="o-ext" data-pt="Extrusão das bordas (px)">Edge extrusion (px)</label><input type="number" id="o-ext" data-opt="extrude" min="0" max="4" step="1"><small data-pt="Evita linhas entre frames ao renderizar.">Prevents seams between frames.</small></div>
+        <div class="field"><label for="o-max" data-pt="Tamanho máximo do atlas">Maximum atlas size</label>
           <select id="o-max" data-opt="maxSize" data-num="1"><option value="2048">2048 px</option><option value="4096">4096 px</option><option value="8192">8192 px</option><option value="16384">16384 px</option></select></div>
-        <label class="tog compact"><input type="checkbox" data-opt="pow2"><span><b>Potência de 2</b> atlas com largura e altura 2ⁿ</span></label>
-        <div class="field"><label for="o-png">Formato do PNG</label>
-          <select id="o-png" data-opt="pngMode"><option value="auto">Automático (sem perdas; usa paleta se couber)</option><option value="rgba">Sempre RGBA 32 bits</option><option value="quantize">PNG-8 quantizado (menor, com perdas)</option></select></div>
-        <div class="field"><label for="o-colors">Cores (quantizado)</label><input type="number" id="o-colors" data-opt="colors" min="2" max="256" step="1"></div>
-        <label class="tog compact"><input type="checkbox" data-opt="dither"><span><b>Dithering</b> suaviza degradês no PNG-8</span></label>
-        <div class="field"><label for="o-suffix">Sufixo dos arquivos de saída</label><input type="text" id="o-suffix" data-opt="suffix" placeholder="(vazio = mesmos nomes)" maxlength="24" autocomplete="off" spellcheck="false"></div>
-        <label class="tog compact"><input type="checkbox" data-opt="compensateRounding"><span><b>Compensar arredondamento</b> usa a escala efetiva real do frame virtual</span></label>
-        <label class="tog compact"><input type="checkbox" data-opt="validate"><span><b>Validar o resultado</b> recompõe os frames e compara com o original</span></label>
-        <label class="tog compact"><input type="checkbox" data-opt="addScaleField"><span><b>Leather:</b> adicionar o campo <code>scale</code> quando o config não tiver</span></label>
-        <label class="tog compact"><input type="checkbox" data-opt="scaleOffsets"><span><b>Leather:</b> multiplicar offsets.txt por S (normalmente não é necessário)</span></label>
+        <label class="tog compact"><input type="checkbox" data-opt="pow2"><span data-pt="<b>Potência de 2</b> largura e altura 2ⁿ"><b>Power of 2</b> width and height 2ⁿ</span></label>
+        <div class="field"><label for="o-png" data-pt="Modo do PNG">PNG mode</label>
+          <select id="o-png" data-opt="pngMode"><option value="auto" data-pt="Automático (sem perdas; usa paleta se couber)">Automatic (lossless; palette when possible)</option><option value="rgba" data-pt="Sempre RGBA 32 bits">Always 32-bit RGBA</option><option value="quantize" data-pt="PNG-8 quantizado (menor, com perdas)">Quantized PNG-8 (smaller, lossy)</option></select></div>
+        <div class="field"><label for="o-colors" data-pt="Cores (quantizado)">Colors (quantized)</label><input type="number" id="o-colors" data-opt="colors" min="2" max="256" step="1"></div>
+        <label class="tog compact"><input type="checkbox" data-opt="dither"><span data-pt="<b>Dithering</b> suaviza degradês no PNG-8"><b>Dithering</b> smooths gradients in PNG-8</span></label>
+        <div class="field"><label for="o-suffix" data-pt="Sufixo dos arquivos de saída">Output file suffix</label><input type="text" id="o-suffix" data-opt="suffix" data-pt-ph="(vazio = mesmos nomes)" placeholder="(empty = same names)" maxlength="24" autocomplete="off" spellcheck="false"></div>
+        <label class="tog compact"><input type="checkbox" data-opt="compensateRounding"><span data-pt="<b>Compensar arredondamento</b> usa a escala efetiva real"><b>Compensate rounding</b> uses the real effective scale</span></label>
+        <label class="tog compact"><input type="checkbox" data-opt="validate"><span data-pt="<b>Validar o resultado</b> recompõe os frames e compara com o original"><b>Validate the result</b> rebuilds the frames and compares them with the original</span></label>
+        <label class="tog compact"><input type="checkbox" data-opt="addScaleField"><span data-pt="<b>Leather:</b> adicionar o campo <code>scale</code> quando o config não tiver"><b>Leather:</b> add a <code>scale</code> field when the config has none</span></label>
+        <div class="field"><label for="o-astcq" data-pt="Qualidade do ASTC">ASTC encoder quality</label><select id="o-astcq" data-opt="astcQuality"><option value="fast" data-pt="Rápido">Fast</option><option value="normal">Normal</option><option value="best" data-pt="Melhor (lento)">Best (slow)</option></select></div>
       </div>
     </details>
   </section>
 
-  <!-- 3. EXECUTAR -->
   <section class="card run" id="sec-run" aria-labelledby="h-run">
-    <h2 id="h-run"><span class="n">3</span>Otimizar</h2>
+    <h2 id="h-run"><span class="n">3</span><span data-pt="Otimizar">Optimize</span></h2>
     <div class="row">
-      <button type="button" id="btn-run" class="btn primary big" disabled>Otimizar</button>
-      <button type="button" id="btn-cancel" class="btn ghost" hidden>Cancelar</button>
+      <button type="button" id="btn-run" class="btn primary big" disabled data-pt="Otimizar">Optimize</button>
+      <button type="button" id="btn-cancel" class="btn ghost" hidden data-pt="Cancelar">Cancel</button>
     </div>
     <div id="progress" class="progress" hidden>
       <div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="bar-fill"></i></div>
-      <span id="progress-text">Preparando…</span>
+      <span id="progress-text">…</span>
     </div>
     <div id="run-error" class="alert error" role="alert" hidden></div>
   </section>
 
-  <!-- 4. RESULTADO -->
   <section id="sec-results" class="card" hidden aria-labelledby="h-res">
     <div class="res-head">
-      <h2 id="h-res"><span class="n">4</span>Resultado</h2>
-      <button type="button" id="btn-zip" class="btn primary">Baixar tudo (.zip)</button>
+      <h2 id="h-res"><span class="n">4</span><span data-pt="Resultado">Result</span></h2>
+      <button type="button" id="btn-zip" class="btn primary" data-pt="Baixar tudo (.zip)">Download all (.zip)</button>
     </div>
     <div class="tabs" role="tablist">
-      <button role="tab" id="tab-summary" aria-selected="true" aria-controls="pane-summary">Resumo</button>
+      <button role="tab" id="tab-summary" aria-selected="true" aria-controls="pane-summary" data-pt="Resumo">Summary</button>
       <button role="tab" id="tab-atlas" aria-selected="false" aria-controls="pane-atlas">Atlas</button>
-      <button role="tab" id="tab-anim" aria-selected="false" aria-controls="pane-anim">Animações</button>
+      <button role="tab" id="tab-anim" aria-selected="false" aria-controls="pane-anim" data-pt="Animações">Animations</button>
       <button role="tab" id="tab-config" aria-selected="false" aria-controls="pane-config">Configs</button>
     </div>
-
     <div id="pane-summary" role="tabpanel" aria-labelledby="tab-summary"></div>
-
     <div id="pane-atlas" role="tabpanel" aria-labelledby="tab-atlas" hidden>
       <div class="toolbar">
         <select id="v-atlas" aria-label="Atlas"></select>
-        <div class="seg" role="group" aria-label="Versão">
-          <button type="button" id="v-orig" aria-pressed="false">Original</button>
-          <button type="button" id="v-opt" aria-pressed="true">Otimizado</button>
+        <div class="seg" role="group">
+          <button type="button" id="v-orig" aria-pressed="false" data-pt="Original">Original</button>
+          <button type="button" id="v-opt" aria-pressed="true" data-pt="Otimizado">Optimized</button>
         </div>
-        <label class="chk"><input type="checkbox" id="v-boxes" checked> Caixas</label>
-        <button type="button" id="v-fit" class="btn small">Ajustar</button>
+        <label class="chk"><input type="checkbox" id="v-boxes" checked> <span data-pt="Caixas">Boxes</span></label>
+        <button type="button" id="v-fit" class="btn small" data-pt="Ajustar">Fit</button>
         <span id="v-info" class="muted"></span>
       </div>
       <div class="stage checker"><canvas id="v-canvas" height="480"></canvas><div id="v-tip" class="tip" hidden></div></div>
-      <p class="hint">Role para dar zoom, arraste para mover, passe o mouse sobre um frame para ver o nome.</p>
+      <p class="hint" data-pt="Role para dar zoom, arraste para mover, passe o mouse sobre um frame para ver o nome.">Scroll to zoom, drag to pan, hover a frame to see its name.</p>
     </div>
-
     <div id="pane-anim" role="tabpanel" aria-labelledby="tab-anim" hidden>
       <div class="toolbar">
-        <select id="a-group" aria-label="Animação"></select>
-        <div class="seg" role="group" aria-label="Modo">
-          <button type="button" id="a-side" aria-pressed="true">Lado a lado</button>
-          <button type="button" id="a-over" aria-pressed="false">Sobrepor</button>
+        <select id="a-group" aria-label="Animation"></select>
+        <div class="seg" role="group">
+          <button type="button" id="a-side" aria-pressed="true" data-pt="Lado a lado">Side by side</button>
+          <button type="button" id="a-over" aria-pressed="false" data-pt="Sobrepor">Overlay</button>
         </div>
-        <button type="button" id="a-play" class="btn small">Pausar</button>
+        <button type="button" id="a-play" class="btn small" data-pt="Pausar">Pause</button>
         <label class="chk">FPS <input type="number" id="a-fps" min="1" max="60" value="24"></label>
         <label class="chk"><input type="checkbox" id="a-offs" checked> Offsets</label>
         <label class="chk">Zoom <input type="range" id="a-zoom" min="0.3" max="3" step="0.05" value="1"></label>
@@ -166,16 +175,48 @@
       <div class="stage checker"><canvas id="a-canvas" height="420"></canvas></div>
       <p class="hint" id="a-info"></p>
     </div>
-
     <div id="pane-config" role="tabpanel" aria-labelledby="tab-config" hidden></div>
-
-    <h3 class="sub">Arquivos gerados</h3>
+    <h3 class="sub" data-pt="Arquivos gerados">Generated files</h3>
     <ul id="downloads" class="downloads"></ul>
   </section>
 </main>
 
+<main id="view-cmp" hidden>
+  <section class="card" aria-labelledby="h-cfiles">
+    <h2 id="h-cfiles"><span class="n">1</span><span data-pt="Imagens">Images</span></h2>
+    <div id="c-drop" class="drop" tabindex="0" role="button">
+      <strong data-pt="Arraste imagens para cá (PNG, JPG, WebP ou ASTC)">Drop images here (PNG, JPG, WebP or ASTC)</strong>
+      <span data-pt="Mantém a qualidade medida (PSNR) e escolhe o menor arquivo possível.">Keeps measured quality (PSNR) and picks the smallest file it can.</span>
+      <div class="row"><button type="button" id="c-pick" class="btn" data-pt="Escolher imagens">Choose images</button></div>
+    </div>
+    <input type="file" id="c-in" multiple hidden accept=".png,.jpg,.jpeg,.webp,.astc,image/*">
+  </section>
+  <section class="card" aria-labelledby="h-copts">
+    <h2 id="h-copts"><span class="n">2</span><span data-pt="Compressão">Compression</span></h2>
+    <div class="grid">
+      <div class="field"><label for="c-quality" data-pt="Qualidade">Quality</label>
+        <select id="c-quality">
+          <option value="lossless" data-pt="Sem perdas (idêntico)">Lossless (identical)</option>
+          <option value="high" data-pt="Alta (quase imperceptível)">High (barely noticeable)</option>
+          <option value="balanced" selected data-pt="Equilibrada (recomendado)">Balanced (recommended)</option>
+          <option value="small" data-pt="Máxima leveza">Smallest</option>
+        </select></div>
+      <div class="field"><label for="c-format" data-pt="Formato de saída">Output format</label>
+        <select id="c-format">
+          <option value="auto" data-pt="Igual ao original">Same as the original</option>
+          <option value="png">PNG</option><option value="webp">WebP</option><option value="jpeg">JPEG</option><option value="astc">ASTC</option>
+        </select></div>
+      <div class="field" id="c-astc-box" hidden><label for="c-astcblock" data-pt="Bloco ASTC">ASTC block size</label><select id="c-astcblock"></select></div>
+    </div>
+    <p class="hint" data-pt="ASTC economiza memória da GPU (tamanho fixo), mas o arquivo costuma ser maior que um PNG com muita transparência.">ASTC saves GPU memory (fixed size per block), but the file is often larger than a PNG with lots of transparency.</p>
+    <div class="row"><button type="button" id="c-run" class="btn primary big" disabled data-pt="Comprimir">Compress</button><button type="button" id="c-zip" class="btn" hidden data-pt="Baixar tudo (.zip)">Download all (.zip)</button></div>
+    <div id="c-progress" class="muted" aria-live="polite"></div>
+    <div id="c-list" class="c-list"></div>
+  </section>
+</main>
+
 <footer>
-  <p>Tudo roda no seu navegador. Seus sprites não são enviados para nenhum servidor. Suporta Psych Engine (qualquer versão) e Leather Engine 0.5.0–1.1.9.</p>
+  <p data-pt="Tudo roda no seu navegador. Seus arquivos não são enviados para nenhum servidor. Suporta Psych Engine (qualquer versão) e Leather Engine 0.5.0–1.1.9.">Everything runs in your browser. Your files are never uploaded. Supports Psych Engine (any version) and Leather Engine 0.5.0–1.1.9.</p>
 </footer>
 
 <script src="js/i18n.js"></script>
@@ -186,6 +227,7 @@
 <script src="js/pack.js"></script>
 <script src="js/config.js"></script>
 <script src="js/pipeline.js"></script>
+<script src="js/compress.js"></script>
 <script src="js/demo.js"></script>
 <script src="js/app.js"></script>
 </body>
