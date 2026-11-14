@@ -10,7 +10,7 @@
   const LS_LANG = 'fnf-funkin-sheet-optimizer:lang';
   const L = (en, pt, v) => { let t = FNF.lang === 'pt' ? pt : en; if (v) t = t.replace(/\{(\w+)\}/g, (m, k) => (k in v ? v[k] : m)); return t; };
 
-  const state = { files: [], paired: null, snapshot: null, batch: null, preview: null, worker: null, running: false, cancel: false, urls: [] };
+  const state = { removed: new Set(), files: [], paired: null, snapshot: null, batch: null, preview: null, worker: null, running: false, cancel: false, urls: [] };
 
   // ------------------------------------------------------------------ opções
   const PRESETS = {
@@ -115,6 +115,36 @@
     if (state.files.length) parts.push('<div class="group"><button type="button" class="btn small ghost" id="btn-clear">' + L('Clear all', 'Limpar tudo') + '</button></div>');
     box.innerHTML = parts.join('');
     $('#btn-run').disabled = state.running || !p.atlases.length;
+    renderRemoval();
+  }
+
+  function renderRemoval() {
+    const box = $('#rm-box'), list = $('#rm-list');
+    const p = state.paired;
+    if (!p || !p.atlases.length) { box.hidden = true; return; }
+    box.hidden = false;
+    const wasOpen = $$('#rm-list details').map((d) => d.open);
+    const valid = new Set();
+    let html = '';
+    p.atlases.forEach((a, ai) => {
+      let frames = [];
+      try { frames = FNF.parseSparrow(a.xmlText).frames.map((f) => f.name); } catch (e) { return; }
+      const groups = new Map();
+      for (const n of frames) { const k = n.replace(/\d+$/, ''); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(n); valid.add(a.name + '\u0000' + n); }
+      html += '<div class="rm-atlas">' + esc(a.name) + '</div>';
+      let gi = 0;
+      for (const [k, names] of groups) {
+        const sel = names.filter((n) => state.removed.has(a.name + '\u0000' + n)).length;
+        html += '<details><summary><input type="checkbox" data-rm-group="' + ai + ':' + gi + '" ' + (sel === names.length ? 'checked' : '') + (sel && sel < names.length ? ' data-partial="1"' : '') + '> ' + esc(k.trim() || '(no name)') + ' <span class="muted">(' + names.length + ')</span></summary><div class="rm-frames">' +
+          names.map((n, ni) => '<label><input type="checkbox" data-rm-frame="' + ai + ':' + gi + ':' + ni + '" ' + (state.removed.has(a.name + '\u0000' + n) ? 'checked' : '') + '> ' + esc(n.slice(k.length) || n) + '</label>').join('') + '</div></details>';
+        gi++;
+      }
+      a._groups = Array.from(groups.values());
+    });
+    for (const k of Array.from(state.removed)) if (!valid.has(k)) state.removed.delete(k);
+    list.innerHTML = html;
+    $$('#rm-list details').forEach((d, i) => { d.open = !!wasOpen[i]; });
+    $$('[data-partial]', list).forEach((el) => { el.indeterminate = true; });
   }
 
   function removePaths(paths) {
@@ -171,7 +201,7 @@
     state.snapshot = p;
     const payload = {
       lang: FNF.lang,
-      atlases: p.atlases.map((a) => ({ name: a.name, dir: a.dir, pngBytes: a.pngBytes, xmlText: a.xmlText })),
+      atlases: p.atlases.map((a) => ({ name: a.name, dir: a.dir, pngBytes: a.pngBytes, xmlText: a.xmlText, removeNames: Array.from(state.removed).filter((k) => k.startsWith(a.name + '\u0000')).map((k) => k.split('\u0000')[1]) })),
       configs: p.configs.map((c) => ({ kind: c.kind, name: c.name, dir: c.dir, text: c.text, bytes: c.bytes, offsets: c.offsets })),
       opts,
     };
@@ -698,6 +728,12 @@
       if (!$('#view-cmp').hidden) return;
       try { await addEntries(await collectDrop(e.dataTransfer)); } catch (err) { showError(L('Could not read the dropped files: ', 'Não consegui ler os arquivos soltos: ') + err.message); }
     });
+    $('#rm-list').addEventListener('change', (e) => {
+      const t = e.target, p = state.paired;
+      let m;
+      if ((m = t.dataset.rmGroup)) { const [ai, gi] = m.split(':').map(Number), at = p.atlases[ai]; for (const n of at._groups[gi]) { const k = at.name + '\u0000' + n; if (t.checked) state.removed.add(k); else state.removed.delete(k); } renderRemoval(); }
+      else if ((m = t.dataset.rmFrame)) { const [ai, gi, ni] = m.split(':').map(Number), at = p.atlases[ai], k = at.name + '\u0000' + at._groups[gi][ni]; if (t.checked) state.removed.add(k); else state.removed.delete(k); renderRemoval(); }
+    });
     $('#file-summary').addEventListener('click', (e) => {
       const t = e.target.closest('button'); if (!t) return;
       const p = state.paired;
@@ -719,6 +755,7 @@
     window.addEventListener('resize', () => { if (!$('#pane-atlas').hidden) { vResize(); } if (!$('#pane-anim').hidden) aResize(); });
   }
 
-  document.addEventListener('DOMContentLoaded', init);
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
+  if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
   window.__fnfApp = { state, run };
 })();

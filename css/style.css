@@ -182,3 +182,10 @@ main[hidden]{display:none}
 .c-item .nm{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .c-item a.btn{white-space:nowrap}
 @media (max-width:560px){.c-item{grid-template-columns:56px minmax(0,1fr)}.c-item a.btn{grid-column:1/-1}}
+
+.rm-list{display:grid;gap:6px;max-height:320px;overflow:auto;padding:4px}
+.rm-list details{border:1px solid #ffffff1f;border-radius:10px;padding:6px 10px}
+.rm-list summary{display:flex;gap:8px;align-items:center;cursor:pointer}
+.rm-frames{display:flex;flex-wrap:wrap;gap:6px 12px;padding:8px 0 2px}
+.rm-frames label{font-size:.85rem;display:flex;gap:4px;align-items:center}
+.rm-atlas{font-weight:600;margin-top:6px}

@@ -65,7 +65,7 @@
 
   /** Procura o menor atlas. rects incluem o padding. opts: {pow2, maxSize}. Retorna {placements, width, height} */
   function planAtlas(rects, opts) {
-    const maxSize = opts.maxSize || 8192;
+    const maxSize = opts.maxSize || 32768;
     let total = 0, maxW = 0, maxH = 0;
     for (const r of rects) {
       total += r.w * r.h;

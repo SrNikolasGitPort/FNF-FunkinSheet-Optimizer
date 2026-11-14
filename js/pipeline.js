@@ -23,7 +23,7 @@
     padding: 1,
     extrude: 1,
     pow2: false,
-    maxSize: 8192,
+    maxSize: 32768,
     pngMode: 'auto',        // auto (paleta exata se couber) | rgba | quantize
     colors: 256,
     dither: false,
@@ -231,6 +231,12 @@
     const img = await decodeAny(input.pngBytes);
     const sp = FNF.parseSparrow(input.xmlText);
     warnings.push(...img.warnings, ...sp.warnings);
+    if (input.removeNames && input.removeNames.length) {
+      const rm = new Set(input.removeNames), before = sp.frames.length;
+      sp.frames = sp.frames.filter((f) => !rm.has(f.name));
+      if (!sp.frames.length) throw new Error(FNF.t('pl.err.allremoved'));
+      warnings.push(FNF.t('pl.warn.removed', { n: before - sp.frames.length }));
+    }
     for (const f of sp.frames) {
       if (f.w <= 0 || f.h <= 0) throw new Error(FNF.t('pl.err.zero', { name: f.name }));
       if (f.x < 0 || f.y < 0 || f.x + f.w > img.width || f.y + f.h > img.height) {
@@ -329,7 +335,6 @@
     const plan = FNF.planAtlas(rects, { pow2: o.pow2, maxSize: o.maxSize });
     const W = o.pow2 ? plan.width : Math.max(1, plan.width - pad);
     const H = o.pow2 ? plan.height : Math.max(1, plan.height - pad);
-    if (Math.max(W, H) > 4096) warnings.push(FNF.t('pl.warn.bigatlas', { w: W, h: H }));
     const atlas = new Uint8Array(W * H * 4);
     for (const b of uniq) {
       const p = plan.placements.get(b.pid);
@@ -510,6 +515,21 @@
       const shift = opts.adjustOffsets && pr && pr.ref && !noScale ? { dx: (pr.ref.fw1 - pr.ref.fw0) / 2, dy: (pr.ref.fh1 - pr.ref.fh0) / 2 } : null;
       const copts = { invScale: noScale ? 1 : invScale, rename, addScaleField: opts.addScaleField, skipScale: noScale, offsetShift: shift };
       const r = c.kind === 'psych' ? FNF.adjustPsychConfig(c.text, copts) : FNF.adjustLeatherConfig(c.text, copts);
+      {
+        // avisa sobre animações do config cujos frames foram todos removidos
+        let j = null; try { j = JSON.parse(c.text.replace(/^\uFEFF/, '')); } catch (e) { /* ignorado */ }
+        const anims = j && Array.isArray(j.animations) ? j.animations : [];
+        for (const at of atlases) {
+          if (!at.removeNames || !at.removeNames.length) continue;
+          const rm = new Set(at.removeNames), all = FNF.parseSparrow(at.xmlText).frames.map((f) => f.name);
+          for (const a of anims) {
+            const key = c.kind === 'psych' ? a.name : a.animation_name;
+            if (typeof key !== 'string' || !key) continue;
+            const mine = all.filter((n) => n.startsWith(key));
+            if (mine.length && mine.every((n) => rm.has(n))) r.warnings.push(FNF.t('pl.warn.animgone', { name: c.kind === 'psych' ? (a.anim || key) : (a.name || key) }));
+          }
+        }
+      }
       const out = {
         name: c.name, dir: c.dir, kind: c.kind, primary: prim ? prim.name : null, invScale,
         shift: shift && (shift.dx || shift.dy) ? shift : null,

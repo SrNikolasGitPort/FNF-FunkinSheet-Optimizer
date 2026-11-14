@@ -15,6 +15,7 @@ What it does:
 - **Smart crop** of transparent borders (adjusts `frameX/frameY`, keeping the virtual frame).
 - **Automatic scale**, or manual 0.1–1, with sub-pixel resampling (Area / Bilinear / Lanczos3, premultiplied alpha) and rounding compensation.
 - **`rotated="true"` support**: rotated frames are read correctly and written back upright.
+- **Remove animations or frames** (optional, under Advanced): untick whole animations or single frames before optimizing; the site warns if the config still references an animation with no frames.
 - **Deduplication** (identical, and optionally near-identical frames) and a **MaxRects packer**.
 - **Smaller images**: adaptive PNG filters, exact palette PNG-8 when possible, optional quantized PNG-8.
 - **ASTC**: reads `.astc` atlases (V-Slice style) and can write `.astc` (block sizes 4×4 … 12×12). The decoder was verified block-by-block against the browser's own GPU ASTC decoder. Limitation: blocks that use multiple partitions or HDR are not supported (reported as warnings).
@@ -31,13 +32,13 @@ A separate tab for any PNG / JPG / WebP / ASTC: choose **Lossless**, **High**, *
 ## Notes
 
 - Offsets are computed from the *dominant* frame size, which is what the engine uses as the scaling origin in practice. Always eyeball the Animations tab for characters with very unusual frames.
-- The atlas must fit in the chosen max size (up to 16384 px); there is no multi-page output.
+- There is no artificial size limit (the atlas can grow up to 32768 px per side); there is no multi-page output.
 - PNG uses the browser's native deflate (`CompressionStream`), which is not as strong as zopfli.
 - When cropping, the XML usually **grows** (adds `frameX/frameY`); the image savings far outweigh it.
 
 ## Run / host
 
-Static site: open `index.html`, or publish with GitHub Pages (a workflow is included). Processing runs in a Web Worker and falls back to the main thread when workers are blocked (e.g. `file://`).
+Static site (scripts are deferred and cached by a small service worker, so repeat visits open instantly): open `index.html`, or publish with GitHub Pages (a workflow is included). Processing runs in a Web Worker and falls back to the main thread when workers are blocked (e.g. `file://`).
 
 ## Tests
 

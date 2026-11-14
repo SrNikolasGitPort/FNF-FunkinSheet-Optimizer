@@ -213,6 +213,23 @@ const kb = (n) => (n / 1024).toFixed(1) + 'KB';
     console.log('  ok escala automática', au.scale, '(PSNR 30) e', au2.scale, '(PSNR 45)');
   }
 
+  // ---- 5c) remover animações / frames
+  {
+    const names = FNF.parseSparrow(atlas.xmlText).frames.map((f) => f.name);
+    const key = names[0].replace(/\d+$/, ''), idle = names.filter((n) => n.startsWith(key)), psychK = psych.replace('BF idle dance', key);
+    assert.ok(idle.length > 3);
+    const pr = FNF.pairFiles([{ name: 'Boyfriend_Assets.png', path: 'a.png', bytes: atlas.pngBytes }, { name: 'Boyfriend_Assets.xml', path: 'a.xml', bytes: FNF.textEncode(atlas.xmlText) }, { name: 'bf.json', path: 'bf.json', bytes: FNF.textEncode(psychK) }]);
+    pr.atlases[0].removeNames = idle;
+    const b = await FNF.runBatch({ atlases: pr.atlases, configs: pr.configs, opts: { scale: 1 } });
+    const left = FNF.parseSparrow(b.results[0].xmlText).frames.map((f) => f.name);
+    assert.strictEqual(left.length, names.length - idle.length);
+    assert.ok(!left.some((n) => n.startsWith(key)) && b.results[0].validation.ok);
+    assert.ok(b.configs[0].warnings.some((w) => /no frames left/.test(w)), 'deve avisar sobre a animação sem frames');
+    pr.atlases[0].removeNames = names;
+    await assert.rejects(() => FNF.optimizeAtlas(pr.atlases[0], { scale: 1 }), /All frames/);
+    console.log('  ok remoção de frames:', idle.length, 'removidos, aviso no config');
+  }
+
   // ---- 6) ZIP
   const files = FNF.collectOutputs(b);
   const zip = await FNF.makeZip(files);

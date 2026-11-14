@@ -7,6 +7,7 @@
 <title>FunkinSheet Optimizer</title>
 <meta name="description" content="Optimize Friday Night Funkin' sprite atlases (PNG/ASTC + Sparrow XML): smart crop, automatic scale, deduplication, rotated frames and character config scale + offset adjustment (Psych and Leather Engine). Also compresses images.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23ff4fa3'/%3E%3Ctext x='32' y='45' font-size='36' text-anchor='middle' fill='white'%3E%E2%99%AA%3C/text%3E%3C/svg%3E">
+<meta name="theme-color" content="#140c2b">
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -93,6 +94,10 @@
     </div>
 
     
+      <div class="field" id="rm-box" hidden>
+        <label data-pt="Remover animações ou frames (opcional)">Remove animations or frames (optional)</label>
+        <div id="rm-list" class="rm-list"></div>
+      </div>
     </details>
     <div hidden aria-hidden="true" id="adv-defaults">
       <div class="grid">
@@ -108,8 +113,6 @@
         <div class="field"><label for="o-neartol" data-pt="Tolerância (quase idênticos)">Near-duplicate tolerance</label><input type="number" id="o-neartol" data-opt="nearTolerance" min="1" max="16" step="1"></div>
         <div class="field"><label for="o-pad" data-pt="Espaçamento entre frames (px)">Frame padding (px)</label><input type="number" id="o-pad" data-opt="padding" min="0" max="8" step="1"></div>
         <div class="field"><label for="o-ext" data-pt="Extrusão das bordas (px)">Edge extrusion (px)</label><input type="number" id="o-ext" data-opt="extrude" min="0" max="4" step="1"><small data-pt="Evita linhas entre frames ao renderizar.">Prevents seams between frames.</small></div>
-        <div class="field"><label for="o-max" data-pt="Tamanho máximo do atlas">Maximum atlas size</label>
-          <select id="o-max" data-opt="maxSize" data-num="1"><option value="2048">2048 px</option><option value="4096">4096 px</option><option value="8192">8192 px</option><option value="16384">16384 px</option></select></div>
         <label class="tog compact"><input type="checkbox" data-opt="pow2"><span data-pt="<b>Potência de 2</b> largura e altura 2ⁿ"><b>Power of 2</b> width and height 2ⁿ</span></label>
         <div class="field"><label for="o-png" data-pt="Modo do PNG">PNG mode</label>
           <select id="o-png" data-opt="pngMode"><option value="auto" data-pt="Automático (sem perdas; usa paleta se couber)">Automatic (lossless; palette when possible)</option><option value="rgba" data-pt="Sempre RGBA 32 bits">Always 32-bit RGBA</option><option value="quantize" data-pt="PNG-8 quantizado (menor, com perdas)">Quantized PNG-8 (smaller, lossy)</option></select></div>
@@ -222,15 +225,15 @@
   <p data-pt="Tudo roda no seu navegador. Seus arquivos não são enviados para nenhum servidor. Suporta Psych Engine (qualquer versão) e Leather Engine 0.5.0–1.1.9.">Everything runs in your browser. Your files are never uploaded. Supports Psych Engine (any version) and Leather Engine 0.5.0–1.1.9.</p>
 </footer>
 
-<script src="js/i18n.js"></script>
-<script src="js/png.js"></script>
-<script src="js/astc.js"></script>
-<script src="js/sparrow.js"></script>
-<script src="js/resample.js"></script>
-<script src="js/pack.js"></script>
-<script src="js/config.js"></script>
-<script src="js/pipeline.js"></script>
-<script src="js/compress.js"></script>
-<script src="js/app.js"></script>
+<script defer src="js/i18n.js"></script>
+<script defer src="js/png.js"></script>
+<script defer src="js/astc.js"></script>
+<script defer src="js/sparrow.js"></script>
+<script defer src="js/resample.js"></script>
+<script defer src="js/pack.js"></script>
+<script defer src="js/config.js"></script>
+<script defer src="js/pipeline.js"></script>
+<script defer src="js/compress.js"></script>
+<script defer src="js/app.js"></script>
 </body>
 </html>
