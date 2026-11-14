@@ -130,6 +130,26 @@ const kb = (n) => (n / 1024).toFixed(1) + 'KB';
     console.log('  ok rotated="true" idêntico ao atlas sem rotação (S=1) e ok com S=0.5');
   }
   {
+    // allowRotate: gira sprites no atlas; o resultado precisa continuar idêntico (pixel a pixel) ao original
+    const dims = []; for (let i = 0; i < 14; i++) dims.push(i % 2 ? [240, 14 + i] : [14 + i, 240]);
+    const AW = 3600, AH = 260, big = new Uint8Array(AW * AH * 4); let ox = 0; const xs = [];
+    dims.forEach(([w, h], i) => {
+      for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) big.set([(x * 7 + i * 13) & 255, (y * 5 + i * 29) & 255, (x + y + i * 3) & 255, 255], (y * AW + ox + x) * 4);
+      xs.push('<SubTexture name="t' + String(i).padStart(4, '0') + '" x="' + ox + '" y="0" width="' + w + '" height="' + h + '"/>'); ox += w + 2;
+    });
+    const inp = { name: 'rt', pngBytes: (await FNF.encodePNG(big, AW, AH, { mode: 'rgba' })).bytes, xmlText: '<TextureAtlas imagePath="rt.png">' + xs.join('') + '</TextureAtlas>' };
+    for (const extra of [{}, { padding: 2, extrude: 1 }]) {
+      const R0 = await FNF.optimizeAtlas(inp, Object.assign({ scale: 1 }, extra));
+      const R1 = await FNF.optimizeAtlas(inp, Object.assign({ scale: 1, allowRotate: true }, extra));
+      assert.ok(R1.validation.ok && R1.validation.exact, 'rotação deve ser sem perdas: ' + R1.validation.errors.join());
+      assert.ok(/rotated="true"/.test(R1.xmlText), 'deve ter girado algum sprite');
+      assert.ok(!/rotated/.test(R0.xmlText));
+      const a0 = R0.stats.atlasAfter, a1 = R1.stats.atlasAfter;
+      assert.ok(a1.w * a1.h <= a0.w * a0.h, 'rotação não pode piorar');
+      console.log('  ok allowRotate ' + JSON.stringify(extra) + ': ' + a0.w + '×' + a0.h + ' → ' + a1.w + '×' + a1.h);
+    }
+  }
+  {
     // frame apontando além do PNG: tolerado (área faltante vira transparente) com aviso
     const big = await FNF.optimizeAtlas({ ...atlas, xmlText: atlas.xmlText.replace('x="0" y="0"', 'x="' + (FNF.parseSparrow(atlas.xmlText).frames[0].x + 5000) + '" y="0"') }, { scale: 1 });
     assert.ok(big.warnings.some((w) => /outside the image/.test(w)) && big.validation.ok, 'deve tolerar frame fora do PNG');

@@ -20,12 +20,19 @@
           if (a < bs || (a === bs && b < bl)) { bs = a; bl = b; best = f; }
         }
       }
+      this.score = [bs, bl];
       return best;
     }
-    place(w, h, mode) {
-      const f = this.find(w, h, mode || 0);
+    place(w, h, mode, rotate) {
+      let f = this.find(w, h, mode || 0), rot = false;
+      if (rotate && w !== h) {
+        const s1 = this.score;
+        const f2 = this.find(h, w, mode || 0);
+        if (f2 && (!f || this.score[0] < s1[0] || (this.score[0] === s1[0] && this.score[1] < s1[1]))) { f = f2; rot = true; }
+      }
       if (!f) return null;
-      const p = { x: f.x, y: f.y, w, h };
+      if (rot) { const t = w; w = h; h = t; }
+      const p = { x: f.x, y: f.y, w, h, rot };
       const kept = [], fresh = [];
       for (const r of this.free) {
         if (p.x >= r.x + r.w || p.x + p.w <= r.x || p.y >= r.y + r.h || p.y + p.h <= r.y) { kept.push(r); continue; }
@@ -51,15 +58,15 @@
   }
 
   // rects: [{id,w,h}] -> { placements:Map(id->{x,y}), usedW, usedH } ou null se não couber em W×H
-  function packInto(rects, W, H, mode) {
+  function packInto(rects, W, H, mode, rotate) {
     const mr = new MaxRects(W, H);
     const pl = new Map();
     let usedW = 0, usedH = 0;
     for (const r of rects) {
-      const p = mr.place(r.w, r.h, mode);
+      const p = mr.place(r.w, r.h, mode, rotate);
       if (!p) return null;
-      pl.set(r.id, { x: p.x, y: p.y });
-      usedW = Math.max(usedW, p.x + r.w); usedH = Math.max(usedH, p.y + r.h);
+      pl.set(r.id, { x: p.x, y: p.y, rot: p.rot });
+      usedW = Math.max(usedW, p.x + p.w); usedH = Math.max(usedH, p.y + p.h);
     }
     return { placements: pl, usedW, usedH };
   }
@@ -70,9 +77,11 @@
   function planAtlas(rects, opts) {
     const maxSize = opts.maxSize || 32768;
     let total = 0, maxW = 0, maxH = 0;
+    const rotate = !!opts.rotate;
     for (const r of rects) {
       total += r.w * r.h;
-      maxW = Math.max(maxW, r.w); maxH = Math.max(maxH, r.h);
+      // com rotação, basta que a menor dimensão caiba
+      maxW = Math.max(maxW, rotate ? Math.min(r.w, r.h) : r.w); maxH = Math.max(maxH, rotate ? Math.min(r.w, r.h) : r.h);
     }
     if (maxW > maxSize || maxH > maxSize) {
       throw new Error('Um frame (' + maxW + '×' + maxH + ') é maior que o tamanho máximo do atlas (' + maxSize + ' px).');
@@ -96,7 +105,7 @@
       let res = null;
       for (const [oi, m] of combos) {
         if (res && over()) break;
-        const r = packInto(orders[oi], W, H, m);
+        const r = packInto(orders[oi], W, H, m, rotate);
         if (!r) continue;
         const area = r.usedW * r.usedH;
         if (!res || area < res.area) res = { placements: r.placements, width: r.usedW, height: r.usedH, area };

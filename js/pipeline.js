@@ -6,6 +6,7 @@
   const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
 
   const DEFAULTS = {
+    allowRotate: false,     // gira sprites 90° no atlas (rotated="true") para compactar mais
     turbo: true,            // validação e escala automática mais rápidas
     format: 'auto',         // 'auto' (mesmo do original) | 'png' | 'astc'
     astcBlock: 'auto',      // 'auto' ou '4x4' … '12x12'
@@ -377,13 +378,25 @@
     await P(FNF.t('pl.stage.pack'), 68);
     const ex = Math.max(0, o.extrude | 0), pad = Math.max(0, o.padding | 0);
     const rects = uniq.map((b, i) => { b.pid = i; return { id: i, w: b.w + 2 * ex + pad, h: b.h + 2 * ex + pad }; });
-    const plan = FNF.planAtlas(rects, { pow2: o.pow2, maxSize: o.maxSize });
+    const plan = FNF.planAtlas(rects, { pow2: o.pow2, maxSize: o.maxSize, rotate: !!o.allowRotate });
     const W = o.pow2 ? plan.width : Math.max(1, plan.width - pad);
     const H = o.pow2 ? plan.height : Math.max(1, plan.height - pad);
     const atlas = new Uint8Array(W * H * 4);
     for (const b of uniq) {
       const p = plan.placements.get(b.pid);
-      b.ax = p.x + ex; b.ay = p.y + ex;
+      b.ax = p.x + ex; b.ay = p.y + ex; b.rot = !!p.rot;
+      if (b.rot) {
+        // região armazenada = bitmap lógico girado 90° horário: armazenado(sx,sy) = lógico(sy, Wst-1-sx), Wst = b.h (+ extrusão)
+        const Ws = b.h + 2 * ex, Hs = b.w + 2 * ex;
+        for (let sy = 0; sy < Hs; sy++) {
+          for (let sx = 0; sx < Ws; sx++) {
+            const lx = Math.min(b.w - 1, Math.max(0, sy - ex)), ly = Math.min(b.h - 1, Math.max(0, Ws - 1 - sx - ex));
+            const sI = (ly * b.w + lx) * 4, dI = ((p.y + sy) * W + p.x + sx) * 4;
+            atlas[dI] = b.data[sI]; atlas[dI + 1] = b.data[sI + 1]; atlas[dI + 2] = b.data[sI + 2]; atlas[dI + 3] = b.data[sI + 3];
+          }
+        }
+        continue;
+      }
       for (let y = 0; y < b.h; y++) atlas.set(b.data.subarray(y * b.w * 4, (y + 1) * b.w * 4), ((b.ay + y) * W + b.ax) * 4);
       if (ex > 0) {
         for (let oy = -ex; oy < b.h + ex; oy++) {
@@ -409,7 +422,7 @@
     const outBase = input.name + (o.suffix || '');
     const pngName = outBase + (wantAstc ? '.astc' : '.png'), xmlName = outBase + '.xml';
     const outFrames = entries.map((e) => ({
-      name: e.name, x: e.bmp.ax, y: e.bmp.ay, w: e.bmp.w, h: e.bmp.h, fx: 0 - e.px, fy: 0 - e.py, fw: e.fw, fh: e.fh,
+      name: e.name, x: e.bmp.ax, y: e.bmp.ay, w: e.bmp.rot ? e.bmp.h : e.bmp.w, h: e.bmp.rot ? e.bmp.w : e.bmp.h, fx: 0 - e.px, fy: 0 - e.py, fw: e.fw, fh: e.fh, rotated: !!e.bmp.rot,
     }));
     const xmlText = FNF.writeSparrow(pngName, outFrames);
 

@@ -575,7 +575,11 @@
     ctx.save();
     ctx.globalAlpha = alpha;
     ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
-    ctx.drawImage(bmp, f.x, f.y, f.w, f.h, tlx - f.fx * s, tly - f.fy * s, f.w * s, f.h * s);
+    if (f.rotated) {
+      // região armazenada girada 90° horário: lógico(lx,ly) = armazenado(W-1-ly, lx)
+      ctx.translate(tlx - f.fx * s, tly - f.fy * s); ctx.scale(s, s); ctx.transform(0, -1, 1, 0, 0, f.w);
+      ctx.drawImage(bmp, f.x, f.y, f.w, f.h, 0, 0, f.w, f.h);
+    } else ctx.drawImage(bmp, f.x, f.y, f.w, f.h, tlx - f.fx * s, tly - f.fy * s, f.w * s, f.h * s);
     ctx.globalAlpha = 1;
     ctx.setLineDash([4, 4]); ctx.strokeStyle = 'rgba(255,255,255,.28)'; ctx.lineWidth = 1;
     ctx.strokeRect(tlx + 0.5, tly + 0.5, f.fw * s, f.fh * s);

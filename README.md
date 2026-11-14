@@ -81,3 +81,7 @@ Optimization is faster (≈5.4 s → ≈3 s on a 4000×3800 atlas): lighter auto
 ## Tighter packing
 
 The packer now tries 5 sort orders × 3 MaxRects heuristics (BSSF, best-area-fit, bottom-left) and refines the atlas width with a local search (2 s time budget). On random sprite sets this raises fill from ~89–92 % to ~94–97 % (smaller PNG dimensions, no overlap, verified by `tests/pack.test.js`). Power-of-two atlases also try every combination per size.
+
+## Optional rotation
+
+Advanced → **Allow rotation** (off by default) lets the packer turn sprites 90° to fit tighter. Rotated frames are written with `rotated="true"` (stored region rotated 90° clockwise, with explicit `frameWidth/frameHeight`), and validation checks the result pixel by pixel. Only enable it if your engine reads `rotated="true"` (HaxeFlixel's Sparrow loader does; some older engine builds may not).

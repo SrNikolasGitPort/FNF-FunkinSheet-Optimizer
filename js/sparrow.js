@@ -69,7 +69,9 @@
     const lines = ['<?xml version="1.0" encoding="utf-8"?>', '<TextureAtlas imagePath="' + encodeAttr(imagePath) + '">'];
     for (const f of frames) {
       let s = '<SubTexture name="' + encodeAttr(f.name) + '" x="' + f.x + '" y="' + f.y + '" width="' + f.w + '" height="' + f.h + '"';
-      if (f.fx !== 0 || f.fy !== 0 || f.fw !== f.w || f.fh !== f.h) {
+      if (f.rotated) {
+        s += ' frameX="' + f.fx + '" frameY="' + f.fy + '" frameWidth="' + f.fw + '" frameHeight="' + f.fh + '" rotated="true"';
+      } else if (f.fx !== 0 || f.fy !== 0 || f.fw !== f.w || f.fh !== f.h) {
         s += ' frameX="' + f.fx + '" frameY="' + f.fy + '" frameWidth="' + f.fw + '" frameHeight="' + f.fh + '"';
       }
       lines.push(s + '/>');
