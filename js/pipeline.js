@@ -44,6 +44,28 @@
     return out;
   }
 
+  /** Chave de agrupamento de um frame: prefixo de animação do config (o mais longo) ou, sem config, o nome sem o contador final. */
+  function frameGroup(name, keys) {
+    let best = null;
+    for (const k of keys || []) if (k && name.startsWith(k) && /^\d*$/.test(name.slice(k.length)) && (!best || k.length > best.length)) best = k;
+    if (best !== null) return best;
+    const m = /\d+$/.exec(name);
+    if (!m) return name;
+    const d = m[0];
+    if (d.length >= 5) return name.slice(0, d[0] === '0' && d.length === 5 ? -5 : -4);
+    return name.slice(0, name.length - d.length);
+  }
+  /** Prefixos de animação (psych: name, leather: animation_name) dos configs que usam o atlas. */
+  function animKeysFor(configs, atlasName) {
+    const keys = new Set();
+    for (const c of configs || []) {
+      let j; try { j = JSON.parse(c.text.replace(/^\uFEFF/, '')); } catch (e) { continue; }
+      if (!FNF.configAtlasRefs(c).map((r) => r.toLowerCase()).includes(atlasName.toLowerCase())) continue;
+      for (const a of Array.isArray(j.animations) ? j.animations : []) { const k = c.kind === 'psych' ? a.name : a.animation_name; if (typeof k === 'string' && k) keys.add(k); }
+    }
+    return Array.from(keys);
+  }
+
   /** Decodifica PNG ou ASTC (.astc) pelo cabeçalho. */
   async function decodeAny(bytes) {
     if (bytes.length > 4 && bytes[0] === 0x13 && bytes[1] === 0xab && bytes[2] === 0xa1 && bytes[3] === 0x5c) {
@@ -539,7 +561,8 @@
           for (const a of anims) {
             const key = c.kind === 'psych' ? a.name : a.animation_name;
             if (typeof key !== 'string' || !key) continue;
-            const mine = all.filter((n) => n.startsWith(key));
+            const keys = anims.map((x) => (c.kind === 'psych' ? x.name : x.animation_name)).filter(Boolean);
+            const mine = all.filter((n) => frameGroup(n, keys) === key);
             if (mine.length && mine.every((n) => rm.has(n))) r.warnings.push(FNF.t('pl.warn.animgone', { name: c.kind === 'psych' ? (a.anim || key) : (a.name || key) }));
           }
         }
@@ -607,5 +630,5 @@
     return files;
   }
 
-  Object.assign(FNF, { DEFAULTS, delta, configAtlasRefs, optimizeAtlas, runBatch, buildReportText, collectOutputs, composeFrame });
+  Object.assign(FNF, { DEFAULTS, delta, configAtlasRefs, optimizeAtlas, runBatch, buildReportText, collectOutputs, composeFrame, frameGroup, animKeysFor });
 })(typeof self !== 'undefined' ? self : globalThis);

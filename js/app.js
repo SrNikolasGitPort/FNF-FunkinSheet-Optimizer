@@ -130,7 +130,8 @@
       let frames = [];
       try { frames = FNF.parseSparrow(a.xmlText).frames.map((f) => f.name); } catch (e) { return; }
       const groups = new Map();
-      for (const n of frames) { const k = n.replace(/\d+$/, ''); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(n); valid.add(a.name + '\u0000' + n); }
+      const keys = FNF.animKeysFor(p.configs, a.name);
+      for (const n of frames) { const k = FNF.frameGroup(n, keys); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(n); valid.add(a.name + '\u0000' + n); }
       html += '<div class="rm-atlas">' + esc(a.name) + '</div>';
       let gi = 0;
       for (const [k, names] of groups) {
@@ -511,9 +512,10 @@
   function fillGroupSelect() {
     A.groups = [];
     state.preview.forEach((p, ai) => {
+      const keys = FNF.animKeysFor(state.batch.configs, p.name);
       const map = new Map();
       p.origFrames.forEach((f, i) => {
-        const key = f.name.replace(/\d+$/, '');
+        const key = FNF.frameGroup(f.name, keys);
         if (!map.has(key)) map.set(key, []);
         map.get(key).push(i);
       });

@@ -234,6 +234,15 @@ const kb = (n) => (n / 1024).toFixed(1) + 'KB';
     console.log('  ok remoção de frames:', idle.length, 'removidos, aviso no config');
   }
 
+  // ---- 5d) idle e idle2 não se misturam
+  {
+    const names = ['idle0000', 'idle0001', 'idle20000', 'idle20001', 'NOTE LEFT00000', 'NOTE LEFT00001', 'singUP0000'];
+    const keys = ['idle', 'idle2'];
+    assert.deepStrictEqual(names.map((n) => FNF.frameGroup(n, keys)), ['idle', 'idle', 'idle2', 'idle2', 'NOTE LEFT', 'NOTE LEFT', 'singUP']);
+    assert.deepStrictEqual(names.slice(0, 4).map((n) => FNF.frameGroup(n, [])), ['idle', 'idle', 'idle2', 'idle2']);
+    console.log('  ok idle / idle2 agrupados separadamente (com e sem config)');
+  }
+
   // ---- 6) ZIP
   const files = FNF.collectOutputs(b);
   const zip = await FNF.makeZip(files);
