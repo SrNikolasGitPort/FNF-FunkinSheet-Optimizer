@@ -14,9 +14,9 @@
 
   // ------------------------------------------------------------------ opções
   const PRESETS = {
-    quality: { autoPsnr: 38, trim: true, dedup: true, cleanInvisible: true, alphaThreshold: 0, aggressive: false, nearDedup: false, nearTolerance: 2, pngMode: 'auto', colors: 256, dither: false },
-    balanced: { autoPsnr: 30, trim: true, dedup: true, cleanInvisible: true, alphaThreshold: 2, aggressive: false, nearDedup: true, nearTolerance: 1, pngMode: 'auto', colors: 256, dither: false },
-    light: { autoPsnr: 26, trim: true, dedup: true, cleanInvisible: true, alphaThreshold: 8, aggressive: true, nearDedup: true, nearTolerance: 3, pngMode: 'quantize', colors: 128, dither: false },
+    quality: { trim: true, dedup: true, cleanInvisible: true, alphaThreshold: 0, aggressive: false, nearDedup: false, nearTolerance: 2, pngMode: 'auto', colors: 256, dither: false },
+    balanced: { trim: true, dedup: true, cleanInvisible: true, alphaThreshold: 2, aggressive: false, nearDedup: true, nearTolerance: 1, pngMode: 'auto', colors: 256, dither: false },
+    light: { trim: true, dedup: true, cleanInvisible: true, alphaThreshold: 8, aggressive: true, nearDedup: true, nearTolerance: 3, pngMode: 'quantize', colors: 128, dither: false },
   };
 
   function optInputs() { return $$('[data-opt]'); }
@@ -29,7 +29,6 @@
       else o[k] = el.value;
     }
     o.suffix = (o.suffix || '').replace(/[^\w.\-]/g, '');
-    if ($('#o-scalemode').value === 'auto') o.scale = 'auto';
     o.addScaleField = o.adjustOffsets;
     return o;
   }
@@ -37,10 +36,9 @@
     for (const el of optInputs()) {
       const k = el.dataset.opt;
       if (!(k in o)) continue;
-      if (k === 'scale' && o[k] === 'auto') continue;
+      if (k === 'scale' && !(parseFloat(o[k]) > 0)) continue;
       if (el.type === 'checkbox') el.checked = !!o[k]; else el.value = o[k];
     }
-    $('#o-scalemode').value = o.scale === 'auto' || o.scale === undefined ? 'auto' : 'manual';
     syncScale();
     syncPreset();
   }
@@ -53,7 +51,6 @@
   function syncScale() {
     const v = parseFloat($('#o-scale').value) || 1;
     $('#scale-val').textContent = v.toFixed(2) + '×';
-    $('#scale-box').hidden = $('#o-scalemode').value !== 'manual';
     $('#astc-box').hidden = $('#o-format').value !== 'astc';
     $$('#scale-presets button').forEach((b) => b.setAttribute('aria-pressed', String(Math.abs(parseFloat(b.dataset.s) - v) < 0.001)));
   }

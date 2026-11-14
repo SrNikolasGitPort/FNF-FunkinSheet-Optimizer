@@ -207,7 +207,7 @@ const kb = (n) => (n / 1024).toFixed(1) + 'KB';
   assert.ok(JSON.parse(b.configs[0].text).scale > 3.5); assert.strictEqual(JSON.parse(b.configs[0].text).image, 'characters/Boyfriend_Assets');
   console.log('  ok Psych sem scale: adicionado', JSON.parse(b.configs[0].text).scale);
 
-  // ---- 5b) offsets + escala automática
+  // ---- 5b) offsets + escala padrão
   {
     const psychO = psych.replace('"offsets": [0, 0]', '"offsets": [10, -20.5]');
     const po = FNF.pairFiles([{ name: 'Boyfriend_Assets.png', path: 'a.png', bytes: atlas.pngBytes }, { name: 'Boyfriend_Assets.xml', path: 'a.xml', bytes: FNF.textEncode(atlas.xmlText) }, { name: 'bf.json', path: 'bf.json', bytes: FNF.textEncode(psychO) }]);
@@ -229,12 +229,10 @@ const kb = (n) => (n / 1024).toFixed(1) + 'KB';
     assert.ok(JSON.parse(bl.configs[0].text).scale > 1.9);
     const l0 = FNF.textDecode(offBytes).split('\n')[0], l1 = bl.configs[0].offsets.text.split('\n')[0];
     assert.notStrictEqual(l0, l1); console.log('  ok Leather offsets:', l0.trim(), '→', l1.trim());
-    // escala automática
-    const au = await FNF.optimizeAtlas(atlas, {});
-    assert.ok(au.auto && au.scale < 1 && au.validation.ok, 'auto deve reduzir: ' + au.scale);
-    const au2 = await FNF.optimizeAtlas(atlas, { autoPsnr: 45 });
-    assert.ok(au2.scale >= au.scale);
-    console.log('  ok escala automática', au.scale, '(PSNR 30) e', au2.scale, '(PSNR 45)');
+    // padrão: escala fixa 1 (sem redução)
+    const d1 = await FNF.optimizeAtlas(atlas, {});
+    assert.strictEqual(d1.scale, 1); assert.ok(d1.validation.ok);
+    console.log('  ok escala padrão fixa', d1.scale);
   }
 
   // ---- 5c) remover animações / frames

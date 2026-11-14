@@ -7,13 +7,13 @@ Live: https://srnikolasgitport.github.io/FNF-FunkinSheet-Optimizer/ — the inte
 ## Optimize atlases
 
 1. Drop the PNG/ASTC + XML (and optionally the Psych Engine JSON, or Leather Engine `config.json` + `offsets.txt`), or the whole character folder.
-2. Pick a profile (Best quality / Balanced / Smallest) and press **Optimize**. Size is **automatic by default**: the optimizer finds the smallest scale that still keeps measured quality (PSNR) — no target size to guess. You can still force a manual scale (0.1–1).
+2. Pick a profile (Best quality / Balanced / Smallest) and press **Optimize**. The sprite scale is **fixed and chosen by you** (0.1–1, default 1.0 = original size); nothing is shrunk automatically.
 3. Check the summary, atlas viewer and animation preview, then **Download all (.zip)**.
 
 What it does:
 
 - **Smart crop** of transparent borders (adjusts `frameX/frameY`, keeping the virtual frame).
-- **Automatic scale**, or manual 0.1–1, with sub-pixel resampling (Area / Bilinear / Lanczos3, premultiplied alpha) and rounding compensation.
+- **Fixed scale** 0.1–1 (you choose), with sub-pixel resampling (Area / Bilinear / Lanczos3, premultiplied alpha) and rounding compensation.
 - **`rotated="true"` support**: rotated frames are read correctly and written back upright.
 - **Remove animations or frames** (optional, under Advanced): untick whole animations or single frames before optimizing; the site warns if the config still references an animation with no frames.
 - **Deduplication** (identical, and optionally near-identical frames) and a **MaxRects packer**.
@@ -46,14 +46,14 @@ Node 18+:
 
 ```bash
 node tests/png.test.js        # PNG decoder/encoder
-node tests/pipeline.test.js   # pipeline, auto scale, rotated, offsets, configs, ZIP
+node tests/pipeline.test.js   # pipeline, rotated, offsets, configs, ZIP
 node tests/astc.test.js       # ASTC encode/decode round trips and pipeline
 node tests/compress.test.js   # image compressor
 ```
 
 ## Português (resumo)
 
-Site que otimiza atlas de sprites do FNF (PNG ou ASTC + XML) e ajusta **scale e offsets** do personagem (Psych e Leather) para ficar alinhado como o original. Suporta `rotated="true"`, escala automática (sem alvo de tamanho), leitura/gravação de ASTC e uma aba **Compress images** para comprimir imagens mantendo a qualidade. Use o botão **PT** no topo para a interface em português.
+Site que otimiza atlas de sprites do FNF (PNG ou ASTC + XML) e ajusta **scale e offsets** do personagem (Psych e Leather) para ficar alinhado como o original. Suporta `rotated="true"`, escala fixa escolhida por você, leitura/gravação de ASTC e uma aba **Compress images** para comprimir imagens mantendo a qualidade. Use o botão **PT** no topo para a interface em português.
 
 ## Structure
 
@@ -76,7 +76,7 @@ tests/           automated tests
 
 ## Turbo
 
-Optimization is faster (≈5.4 s → ≈3 s on a 4000×3800 atlas): lighter auto-scale sampling, validation reuses the in-memory atlas for lossless PNG, and a fast path for empty PNG rows. The worker is pre-warmed at page load, and the progress bar shows live elapsed time.
+Optimization is faster (≈5.4 s → ≈3 s on a 4000×3800 atlas): validation reuses the in-memory atlas for lossless PNG, and a fast path for empty PNG rows. The worker is pre-warmed at page load, and the progress bar shows live elapsed time.
 
 ## Tighter packing
 

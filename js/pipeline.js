@@ -7,12 +7,11 @@
 
   const DEFAULTS = {
     allowRotate: false,     // gira sprites 90° no atlas (rotated="true") para compactar mais
-    turbo: true,            // validação e escala automática mais rápidas
+    turbo: true,            // validação mais rápida
     format: 'auto',         // 'auto' (mesmo do original) | 'png' | 'astc'
     astcBlock: 'auto',      // 'auto' ou '4x4' … '12x12'
     astcQuality: 'normal',
-    scale: 'auto',          // 'auto' (menor escala com boa qualidade) ou número 0.1 … 1
-    autoPsnr: 30,           // qualidade mínima (dB) usada pela escala automática
+    scale: 1,               // escala fixa escolhida pela pessoa, 0.1 … 1
     filter: 'area',         // area | bilinear | lanczos
     compensateRounding: true,
     trim: true,
@@ -92,41 +91,6 @@
       }
     }
     return { w: lw, h: lh, data: out };
-  }
-
-  /** Escolhe a menor escala (0.1–1) em que reduzir e ampliar de volta ainda mantém o PSNR mínimo. */
-  function autoScale(entries, target) {
-    const uniq = [...new Set(entries.map((e) => e.bmp))].filter((b) => b.w * b.h >= 64);
-    if (!uniq.length) return 1;
-    uniq.sort((a, b) => b.w * b.h - a.w * a.h);
-    const pick = [];
-    const n = Math.min(8, uniq.length);
-    const crop = (b) => { // janela central de até 128×128 (basta para medir a perda por redução)
-      const cw = Math.min(b.w, 128), ch = Math.min(b.h, 128);
-      if (cw === b.w && ch === b.h) return b;
-      const x0 = (b.w - cw) >> 1, y0 = (b.h - ch) >> 1, d = new Uint8Array(cw * ch * 4);
-      for (let y = 0; y < ch; y++) d.set(b.data.subarray(((y0 + y) * b.w + x0) * 4, ((y0 + y) * b.w + x0 + cw) * 4), y * cw * 4);
-      return { w: cw, h: ch, data: d };
-    };
-    for (let i = 0; i < n; i++) pick.push(crop(uniq[Math.floor((i * (uniq.length - 1)) / Math.max(1, n - 1))]));
-    const score = (S) => {
-      let sum = 0;
-      for (const b of pick) {
-        const nw = Math.max(1, Math.round(b.w * S)), nh = Math.max(1, Math.round(b.h * S));
-        const small = FNF.resizeRGBA(b.data, b.w, b.h, nw, nh, 'area');
-        const back = FNF.resizeRGBA(small, nw, nh, b.w, b.h, 'bilinear');
-        sum += Math.min(60, psnrAndDiff(b.data, back).psnr);
-      }
-      return sum / pick.length;
-    };
-    if (score(0.1) >= target) return 0.1;
-    if (score(1) < target) return 1;
-    let lo = 10, hi = 100; // inteiros em centésimos: lo falha, hi passa
-    while (hi - lo > 1) {
-      const mid = (lo + hi) >> 1;
-      if (score(mid / 100) >= target) hi = mid; else lo = mid;
-    }
-    return hi / 100;
   }
 
   function bboxAlpha(d, w, h, thr) {
@@ -253,8 +217,7 @@
   async function optimizeAtlas(input, userOpts, progress) {
     const t0 = now();
     const o = Object.assign({}, DEFAULTS, userOpts || {});
-    const autoMode = o.scale === 'auto';
-    o.scale = autoMode ? 1 : Math.min(1, Math.max(0.1, Number(o.scale) || 1));
+    o.scale = Math.min(1, Math.max(0.1, Number(o.scale) || 1));
     const P = async (stage, pct) => { if (progress) await progress(stage, pct); };
     const warnings = [];
 
@@ -328,8 +291,6 @@
     // escala efetiva (compensa o arredondamento do tamanho do frame virtual)
     let Sx = 1, Sy = 1;
     let refDims = null;
-    if (!o.forceScale && autoMode) await P(FNF.t('pl.stage.auto'), 28);
-    if (!o.forceScale && autoMode) o.scale = autoScale(entries, Number(o.autoPsnr) || 30);
     {
       const count = new Map();
       for (const e of entries) { const k = e.fw + 'x' + e.fh; count.set(k, (count.get(k) || 0) + 1); }
@@ -508,7 +469,7 @@
     return {
       name: input.name, dir: input.dir || '', outName: outBase, pngName, xmlName,
       pngBytes: enc.bytes, xmlText, atlas: { w: W, h: H },
-      Sx, Sy, seff: Math.sqrt(Sx * Sy), scale: o.scale, auto: autoMode && !o.forceScale, shared: !!o.forceScale,
+      Sx, Sy, seff: Math.sqrt(Sx * Sy), scale: o.scale, shared: !!o.forceScale,
       ref: { fw0: refDims[0], fh0: refDims[1], fw1: Math.max(1, Math.round(refDims[0] * Sx)), fh1: Math.max(1, Math.round(refDims[1] * Sy)) },
       stats, validation, warnings, ms: Math.round(now() - t0),
     };
@@ -617,7 +578,7 @@
     const L = [FNF.t('rep.title'), ''];
     for (const r of batch.results) {
       const s = r.stats;
-      L.push(FNF.t('rep.atlas', { name: r.name, scale: r.shared ? FNF.t('rep.sharedscale') : r.scale + (r.auto ? ' (auto)' : ''), eff: r.seff.toFixed(4) }));
+      L.push(FNF.t('rep.atlas', { name: r.name, scale: r.shared ? FNF.t('rep.sharedscale') : r.scale, eff: r.seff.toFixed(4) }));
       L.push('  PNG: ' + kb(s.pngBefore) + ' → ' + kb(s.pngAfter) + ' (' + delta(s.pngBefore, s.pngAfter) + ')  [' + s.pngKind + ']');
       L.push('  XML: ' + kb(s.xmlBefore) + ' → ' + kb(s.xmlAfter) + ' (' + delta(s.xmlBefore, s.xmlAfter) + ')');
       L.push(FNF.t('rep.atlasdim', { a: s.atlasBefore.w + '×' + s.atlasBefore.h, b: s.atlasAfter.w + '×' + s.atlasAfter.h }));

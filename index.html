@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="dark">
 <title>FunkinSheet Optimizer</title>
-<meta name="description" content="Optimize Friday Night Funkin' sprite atlases (PNG/ASTC + Sparrow XML): smart crop, automatic scale, deduplication, rotated frames and character config scale + offset adjustment (Psych and Leather Engine). Also compresses images.">
+<meta name="description" content="Optimize Friday Night Funkin' sprite atlases (PNG/ASTC + Sparrow XML): smart crop, scale, deduplication, rotated frames and character config scale + offset adjustment (Psych and Leather Engine). Also compresses images.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23ff4fa3'/%3E%3Ctext x='32' y='45' font-size='36' text-anchor='middle' fill='white'%3E%E2%99%AA%3C/text%3E%3C/svg%3E">
 <meta name="theme-color" content="#140c2b">
 <link rel="stylesheet" href="css/style.css">
@@ -50,7 +50,7 @@
     <h2 id="h-opts"><span class="n">2</span><span data-pt="Otimização">Settings</span></h2>
     <details class="adv" id="adv-main">
       <summary data-pt="Avançado (opcional)">Advanced (optional)</summary>
-      <p class="hint" data-pt="Os padrões servem para quase todo mundo: Equilibrado, tamanho automático e mesmo formato do original.">The defaults work for almost everyone: Balanced, automatic size and the same format as the original.</p>
+      <p class="hint" data-pt="Os padrões servem para quase todo mundo: Equilibrado, tamanho original (1.0×) e mesmo formato do original.">The defaults work for almost everyone: Balanced, original size (1.0×) and the same format as the original.</p>
       <div class="grid">
       <div class="field">
         <label for="o-preset" data-pt="Perfil">Profile</label>
@@ -61,14 +61,7 @@
           <option value="custom" hidden data-pt="Personalizado">Custom</option>
         </select>
       </div>
-      <div class="field">
-        <label for="o-scalemode" data-pt="Tamanho dos sprites">Sprite size</label>
-        <select id="o-scalemode">
-          <option value="auto" data-pt="Automático (o menor possível com boa qualidade)">Automatic (smallest that still looks good)</option>
-          <option value="manual" data-pt="Escala manual">Manual scale</option>
-        </select>
-      </div>
-      <div class="field" id="scale-box" hidden>
+      <div class="field" id="scale-box">
         <div class="scale-head"><label for="o-scale" data-pt="Escala">Scale</label><output id="scale-val" for="o-scale">1.00×</output></div>
         <input type="range" id="o-scale" data-opt="scale" min="0.1" max="1" step="0.01" value="1">
         <div class="chips" id="scale-presets" role="group">
@@ -104,7 +97,6 @@
       <div class="grid">
         <div class="field"><label for="o-filter" data-pt="Filtro de redução">Downscale filter</label>
           <select id="o-filter" data-opt="filter"><option value="area" data-pt="Área (recomendado)">Area (recommended)</option><option value="lanczos" data-pt="Lanczos3 (mais nítido)">Lanczos3 (sharper)</option><option value="bilinear" data-pt="Bilinear (mais suave)">Bilinear (softer)</option></select></div>
-        <div class="field"><label for="o-psnr" data-pt="Qualidade mínima da escala automática (dB)">Auto-scale minimum quality (dB)</label><input type="number" id="o-psnr" data-opt="autoPsnr" min="20" max="50" step="1"><small data-pt="Maior = mantém mais detalhes (escala maior).">Higher = keeps more detail (larger scale).</small></div>
         <label class="tog compact"><input type="checkbox" data-opt="trim"><span data-pt="<b>Corte inteligente</b> remove as bordas transparentes"><b>Smart crop</b> removes transparent borders</span></label>
         <label class="tog compact"><input type="checkbox" data-opt="dedup"><span data-pt="<b>Deduplicação</b> frames idênticos dividem a mesma região"><b>Deduplication</b> identical frames share one region</span></label>
         <label class="tog compact"><input type="checkbox" data-opt="cleanInvisible"><span data-pt="<b>Limpar pixels invisíveis</b> zera o RGB dos pixels transparentes"><b>Clean invisible pixels</b> zeroes RGB of transparent pixels</span></label>
