@@ -90,8 +90,7 @@
       <label class="tog"><input type="checkbox" data-opt="adjustOffsets"><span data-pt="<b>Manter o personagem alinhado</b> ajusta o scale e os offsets do config para ficar igual ao original"><b>Keep the character aligned</b> adjusts the config scale and offsets so it looks like the original</span></label>
     </div>
 
-    <details class="adv">
-      <summary data-pt="Mais opções">More options</summary>
+    <div hidden aria-hidden="true" id="adv-defaults">
       <div class="grid">
         <div class="field"><label for="o-filter" data-pt="Filtro de redução">Downscale filter</label>
           <select id="o-filter" data-opt="filter"><option value="area" data-pt="Área (recomendado)">Area (recommended)</option><option value="lanczos" data-pt="Lanczos3 (mais nítido)">Lanczos3 (sharper)</option><option value="bilinear" data-pt="Bilinear (mais suave)">Bilinear (softer)</option></select></div>
@@ -118,7 +117,7 @@
         <label class="tog compact"><input type="checkbox" data-opt="addScaleField"><span data-pt="<b>Leather:</b> adicionar o campo <code>scale</code> quando o config não tiver"><b>Leather:</b> add a <code>scale</code> field when the config has none</span></label>
         <div class="field"><label for="o-astcq" data-pt="Qualidade do ASTC">ASTC encoder quality</label><select id="o-astcq" data-opt="astcQuality"><option value="fast" data-pt="Rápido">Fast</option><option value="normal">Normal</option><option value="best" data-pt="Melhor (lento)">Best (slow)</option></select></div>
       </div>
-    </details>
+    </div>
   </section>
 
   <section class="card run" id="sec-run" aria-labelledby="h-run">
