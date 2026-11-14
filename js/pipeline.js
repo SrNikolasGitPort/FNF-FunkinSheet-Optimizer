@@ -449,7 +449,7 @@
     return {
       name: input.name, dir: input.dir || '', outName: outBase, pngName, xmlName,
       pngBytes: enc.bytes, xmlText, atlas: { w: W, h: H },
-      Sx, Sy, seff: Math.sqrt(Sx * Sy), scale: o.scale, auto: autoMode && !o.forceScale,
+      Sx, Sy, seff: Math.sqrt(Sx * Sy), scale: o.scale, auto: autoMode && !o.forceScale, shared: !!o.forceScale,
       ref: { fw0: refDims[0], fh0: refDims[1], fw1: Math.max(1, Math.round(refDims[0] * Sx)), fh1: Math.max(1, Math.round(refDims[1] * Sy)) },
       stats, validation, warnings, ms: Math.round(now() - t0),
     };
@@ -557,7 +557,7 @@
     const L = [FNF.t('rep.title'), ''];
     for (const r of batch.results) {
       const s = r.stats;
-      L.push(FNF.t('rep.atlas', { name: r.name, scale: r.scale + (r.auto ? ' (auto)' : ''), eff: r.seff.toFixed(4) }));
+      L.push(FNF.t('rep.atlas', { name: r.name, scale: r.shared ? FNF.t('rep.sharedscale') : r.scale + (r.auto ? ' (auto)' : ''), eff: r.seff.toFixed(4) }));
       L.push('  PNG: ' + kb(s.pngBefore) + ' → ' + kb(s.pngAfter) + ' (' + delta(s.pngBefore, s.pngAfter) + ')  [' + s.pngKind + ']');
       L.push('  XML: ' + kb(s.xmlBefore) + ' → ' + kb(s.xmlAfter) + ' (' + delta(s.xmlBefore, s.xmlAfter) + ')');
       L.push(FNF.t('rep.atlasdim', { a: s.atlasBefore.w + '×' + s.atlasBefore.h, b: s.atlasAfter.w + '×' + s.atlasAfter.h }));

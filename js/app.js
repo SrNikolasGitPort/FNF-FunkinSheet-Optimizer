@@ -301,7 +301,7 @@
         .concat(v.errors.map((m) => '<div class="note error">' + esc(m) + '</div>'))
         .concat(r.warnings.concat(v.warnings).map((m) => '<div class="note warn">' + esc(m) + '</div>')).join('');
       const bar = (a, b) => '<div class="meter"><i style="width:' + Math.min(100, Math.round((b / a) * 100)) + '%"></i></div>';
-      const sc = r.scale.toFixed(2) + (r.auto ? ' (auto)' : '');
+      const sc = r.shared ? L('same as the main atlas', 'igual ao atlas principal') : r.scale.toFixed(2) + (r.auto ? ' (auto)' : '');
       return '<div class="atlas-card"><h3>' + esc(r.name) + ' ' + pill + '<span class="muted">' + L('scale', 'escala') + ' ' + sc + ' (' + L('effective', 'efetiva') + ' ' + r.seff.toFixed(3) + ') · ' + r.ms + ' ms</span></h3>' +
         '<div class="metrics">' +
         '<div class="metric"><div class="k">' + L('Image', 'Imagem') + '</div><div class="v">' + fmtBytes(s.pngBefore) + ' → ' + fmtBytes(s.pngAfter) + '</div>' + deltaHtml(s.pngBefore, s.pngAfter) + ' <span class="muted">' + esc(s.pngKind) + '</span>' + bar(s.pngBefore, s.pngAfter) + '</div>' +
