@@ -47,13 +47,16 @@
 
   <section class="card" id="sec-opts" aria-labelledby="h-opts">
     <h2 id="h-opts"><span class="n">2</span><span data-pt="Otimização">Settings</span></h2>
-    <div class="grid">
+    <details class="adv" id="adv-main">
+      <summary data-pt="Avançado (opcional)">Advanced (optional)</summary>
+      <p class="hint" data-pt="Os padrões servem para quase todo mundo: Equilibrado, tamanho automático e mesmo formato do original.">The defaults work for almost everyone: Balanced, automatic size and the same format as the original.</p>
+      <div class="grid">
       <div class="field">
         <label for="o-preset" data-pt="Perfil">Profile</label>
         <select id="o-preset">
-          <option value="quality" data-pt="Máxima qualidade">Best quality</option>
-          <option value="balanced" data-pt="Equilibrado">Balanced</option>
-          <option value="light" data-pt="Máxima leveza (mobile)">Smallest size (mobile)</option>
+          <option value="quality" data-pt="Máxima qualidade (menos redução)">Best quality (less shrinking)</option>
+          <option value="balanced" data-pt="Equilibrado (recomendado)">Balanced (recommended)</option>
+          <option value="light" data-pt="Máxima leveza (celular, perde um pouco de detalhe)">Smallest size (mobile, loses a bit of detail)</option>
           <option value="custom" hidden data-pt="Personalizado">Custom</option>
         </select>
       </div>
@@ -89,6 +92,8 @@
       <label class="tog"><input type="checkbox" data-opt="adjustOffsets"><span data-pt="<b>Manter o personagem alinhado</b> ajusta o scale e os offsets do config para ficar igual ao original"><b>Keep the character aligned</b> adjusts the config scale and offsets so it looks like the original</span></label>
     </div>
 
+    
+    </details>
     <div hidden aria-hidden="true" id="adv-defaults">
       <div class="grid">
         <div class="field"><label for="o-filter" data-pt="Filtro de redução">Downscale filter</label>
