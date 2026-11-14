@@ -6,7 +6,7 @@ Live: https://srnikolasgitport.github.io/FNF-FunkinSheet-Optimizer/ — the inte
 
 ## Optimize atlases
 
-1. Drop the PNG/ASTC + XML (and optionally the Psych Engine JSON, or Leather Engine `config.json` + `offsets.txt`), or the whole character folder. **Load example (BF)** lets you try it without files.
+1. Drop the PNG/ASTC + XML (and optionally the Psych Engine JSON, or Leather Engine `config.json` + `offsets.txt`), or the whole character folder.
 2. Pick a profile (Best quality / Balanced / Smallest) and press **Optimize**. Size is **automatic by default**: the optimizer finds the smallest scale that still keeps measured quality (PSNR) — no target size to guess. You can still force a manual scale (0.1–1).
 3. Check the summary, atlas viewer and animation preview, then **Download all (.zip)**.
 

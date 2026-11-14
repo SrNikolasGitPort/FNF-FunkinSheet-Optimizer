@@ -698,12 +698,6 @@
       if (!$('#view-cmp').hidden) return;
       try { await addEntries(await collectDrop(e.dataTransfer)); } catch (err) { showError(L('Could not read the dropped files: ', 'Não consegui ler os arquivos soltos: ') + err.message); }
     });
-    $('#btn-demo').addEventListener('click', async (e) => {
-      e.stopPropagation();
-      setProgress(L('Building the example character…', 'Gerando personagem de exemplo…'), 20);
-      await new Promise((r) => setTimeout(r, 30));
-      try { state.files = await FNF.makeDemo(); refreshFiles(); } finally { $('#progress').hidden = true; }
-    });
     $('#file-summary').addEventListener('click', (e) => {
       const t = e.target.closest('button'); if (!t) return;
       const p = state.paired;
