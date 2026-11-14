@@ -207,6 +207,10 @@
     const cand = [0, 1, 2, 3, 4].map(() => new Uint8Array(stride));
     for (let y = 0; y < h; y++) {
       const r = y * stride, p = r - stride;
+      // linha toda transparente/zero (comum em atlas): filtro None sem testar os outros
+      let allZero = true;
+      for (let i = 0; i < stride; i++) if (data[r + i] !== 0) { allZero = false; break; }
+      if (allZero) { out[y * (stride + 1)] = 0; continue; }
       let best = -1, bestScore = Infinity;
       for (let t = 0; t < 5; t++) {
         const c = cand[t];

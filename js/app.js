@@ -160,13 +160,19 @@
     const v = Math.max(0, Math.min(100, Math.round(pct)));
     $('#bar-fill').style.width = v + '%';
     $('.bar').setAttribute('aria-valuenow', String(v));
+    if (!state.t0) state.t0 = Date.now();
+    clearInterval(state.tick);
+    const upd = () => { $('#progress-text').textContent = text + ' · ' + ((Date.now() - state.t0) / 1000).toFixed(1) + 's'; };
+    upd();
+    state.tick = setInterval(upd, 200);
   }
+  function stopProgress() { clearInterval(state.tick); state.t0 = 0; $('#progress').hidden = true; }
   function showError(msg) { const e = $('#run-error'); e.hidden = !msg; e.textContent = msg || ''; }
 
   function runInWorker(payload) {
     return new Promise((resolve, reject) => {
       let w;
-      try { w = new Worker('js/worker.js'); } catch (e) { reject({ fallback: true }); return; }
+      try { w = state.warm || new Worker('js/worker.js'); state.warm = null; } catch (e) { reject({ fallback: true }); return; }
       state.worker = w;
       let started = false;
       w.onmessage = (ev) => {
@@ -206,7 +212,7 @@
       configs: p.configs.map((c) => ({ kind: c.kind, name: c.name, dir: c.dir, text: c.text, bytes: c.bytes, offsets: c.offsets })),
       opts,
     };
-    state.running = true; state.cancel = false;
+    state.running = true; state.cancel = false; state.t0 = 0;
     $('#btn-run').disabled = true; $('#btn-cancel').hidden = false; showError('');
     $('#sec-results').hidden = true;
     setProgress(L('Starting…', 'Iniciando…'), 0);
@@ -216,20 +222,23 @@
       catch (e) { if (e && e.fallback) { setProgress(L('Processing on the main thread…', 'Processando na página principal…'), 0); batch = await runOnMain(payload); } else throw e; }
       state.batch = batch;
       await showResults(batch);
-      $('#progress').hidden = true;
+      stopProgress();
     } catch (e) {
-      $('#progress').hidden = true;
+      stopProgress();
       if (!state.cancel) showError((e && e.message) || String(e));
     } finally {
-      state.running = false; state.worker = null;
+      state.running = false; state.worker = null; prewarm();
       $('#btn-cancel').hidden = true; $('#btn-run').disabled = !(state.paired && state.paired.atlases.length);
     }
+  }
+  function prewarm() {
+    try { if (!state.warm && window.Worker) state.warm = new Worker('js/worker.js'); } catch (e) { state.warm = null; }
   }
   function cancel() {
     state.cancel = true;
     if (state.worker) { state.worker.terminate(); state.worker = null; }
     state.running = false;
-    $('#progress').hidden = true; $('#btn-cancel').hidden = true;
+    stopProgress(); $('#btn-cancel').hidden = true;
     $('#btn-run').disabled = !(state.paired && state.paired.atlases.length);
     showError(L('Optimization cancelled.', 'Otimização cancelada.'));
   }
@@ -758,6 +767,7 @@
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
+  window.addEventListener('load', () => (window.requestIdleCallback || setTimeout)(prewarm));
   if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
   window.__fnfApp = { state, run };
 })();

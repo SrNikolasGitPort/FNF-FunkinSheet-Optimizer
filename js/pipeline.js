@@ -6,6 +6,7 @@
   const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
 
   const DEFAULTS = {
+    turbo: true,            // validação e escala automática mais rápidas
     format: 'auto',         // 'auto' (mesmo do original) | 'png' | 'astc'
     astcBlock: 'auto',      // 'auto' ou '4x4' … '12x12'
     astcQuality: 'normal',
@@ -98,8 +99,15 @@
     if (!uniq.length) return 1;
     uniq.sort((a, b) => b.w * b.h - a.w * a.h);
     const pick = [];
-    const n = Math.min(14, uniq.length);
-    for (let i = 0; i < n; i++) pick.push(uniq[Math.floor((i * (uniq.length - 1)) / Math.max(1, n - 1))]);
+    const n = Math.min(8, uniq.length);
+    const crop = (b) => { // janela central de até 128×128 (basta para medir a perda por redução)
+      const cw = Math.min(b.w, 128), ch = Math.min(b.h, 128);
+      if (cw === b.w && ch === b.h) return b;
+      const x0 = (b.w - cw) >> 1, y0 = (b.h - ch) >> 1, d = new Uint8Array(cw * ch * 4);
+      for (let y = 0; y < ch; y++) d.set(b.data.subarray(((y0 + y) * b.w + x0) * 4, ((y0 + y) * b.w + x0 + cw) * 4), y * cw * 4);
+      return { w: cw, h: ch, data: d };
+    };
+    for (let i = 0; i < n; i++) pick.push(crop(uniq[Math.floor((i * (uniq.length - 1)) / Math.max(1, n - 1))]));
     const score = (S) => {
       let sum = 0;
       for (const b of pick) {
@@ -319,6 +327,7 @@
     // escala efetiva (compensa o arredondamento do tamanho do frame virtual)
     let Sx = 1, Sy = 1;
     let refDims = null;
+    if (!o.forceScale && autoMode) await P(FNF.t('pl.stage.auto'), 28);
     if (!o.forceScale && autoMode) o.scale = autoScale(entries, Number(o.autoPsnr) || 30);
     {
       const count = new Map();
@@ -424,7 +433,8 @@
     const validation = { ok: true, errors: [], warnings: [], psnrMin: null, psnrAvg: null, frames: 0, exact: null, lossy };
     if (o.validate) {
       await P(FNF.t('pl.stage.validate'), 86);
-      const newImg = await decodeAny(enc.bytes);
+      // turbo: em PNG sem perdas, o que foi codificado é exatamente o atlas em memória (o encoder tem testes próprios)
+      const newImg = o.turbo !== false && !wantAstc && o.pngMode !== 'quantize' ? { width: W, height: H, data: atlas } : await decodeAny(enc.bytes);
       const newSp = FNF.parseSparrow(xmlText);
       if (newSp.frames.length !== sp.frames.length) validation.errors.push(FNF.t('pl.val.count'));
       for (let i = 0; i < Math.min(newSp.frames.length, sp.frames.length); i++) {

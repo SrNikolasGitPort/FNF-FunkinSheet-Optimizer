@@ -1,5 +1,5 @@
 /* Cache simples: abre rápido nas próximas visitas e atualiza em segundo plano (stale-while-revalidate). */
-const CACHE = 'fnf-sheet-v3';
+const CACHE = 'fnf-sheet-v4';
 self.addEventListener('install', (e) => { self.skipWaiting(); });
 self.addEventListener('activate', (e) => {
   e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== CACHE).map((k) => caches.delete(k)))).then(() => self.clients.claim()));
