@@ -8,19 +8,22 @@
       this.W = W; this.H = H;
       this.free = [{ x: 0, y: 0, w: W, h: H }];
     }
-    find(w, h) {
+    // mode: 0 = BSSF (menor sobra curta), 1 = BAF (menor área livre), 2 = Bottom-Left
+    find(w, h, mode) {
       let best = null, bs = Infinity, bl = Infinity;
       for (const f of this.free) {
         if (f.w >= w && f.h >= h) {
-          const lw = f.w - w, lh = f.h - h;
-          const ss = Math.min(lw, lh), ls = Math.max(lw, lh);
-          if (ss < bs || (ss === bs && ls < bl)) { bs = ss; bl = ls; best = f; }
+          let a, b;
+          if (mode === 1) { a = f.w * f.h - w * h; b = Math.min(f.w - w, f.h - h); }
+          else if (mode === 2) { a = f.y + h; b = f.x; }
+          else { a = Math.min(f.w - w, f.h - h); b = Math.max(f.w - w, f.h - h); }
+          if (a < bs || (a === bs && b < bl)) { bs = a; bl = b; best = f; }
         }
       }
       return best;
     }
-    place(w, h) {
-      const f = this.find(w, h);
+    place(w, h, mode) {
+      const f = this.find(w, h, mode || 0);
       if (!f) return null;
       const p = { x: f.x, y: f.y, w, h };
       const kept = [], fresh = [];
@@ -48,12 +51,12 @@
   }
 
   // rects: [{id,w,h}] -> { placements:Map(id->{x,y}), usedW, usedH } ou null se não couber em W×H
-  function packInto(rects, W, H) {
+  function packInto(rects, W, H, mode) {
     const mr = new MaxRects(W, H);
     const pl = new Map();
     let usedW = 0, usedH = 0;
     for (const r of rects) {
-      const p = mr.place(r.w, r.h);
+      const p = mr.place(r.w, r.h, mode);
       if (!p) return null;
       pl.set(r.id, { x: p.x, y: p.y });
       usedW = Math.max(usedW, p.x + r.w); usedH = Math.max(usedH, p.y + r.h);
@@ -74,7 +77,33 @@
     if (maxW > maxSize || maxH > maxSize) {
       throw new Error('Um frame (' + maxW + '×' + maxH + ') é maior que o tamanho máximo do atlas (' + maxSize + ' px).');
     }
-    const sorted = rects.slice().sort((a, b) => Math.max(b.w, b.h) - Math.max(a.w, a.h) || b.w * b.h - a.w * a.h);
+    const orders = [
+      (a, b) => Math.max(b.w, b.h) - Math.max(a.w, a.h) || b.w * b.h - a.w * a.h,
+      (a, b) => b.w * b.h - a.w * a.h,
+      (a, b) => b.h - a.h || b.w - a.w,
+      (a, b) => b.w - a.w || b.h - a.h,
+      (a, b) => (b.w + b.h) - (a.w + a.h) || b.w * b.h - a.w * a.h,
+    ].map((c) => rects.slice().sort(c));
+    // orçamento de tempo: muitos retângulos => menos combinações
+    const combos = [];
+    const modes = rects.length > 3000 ? [0] : [0, 1, 2];
+    const ords = rects.length > 3000 ? [0, 1] : orders.map((_, i) => i);
+    for (const oi of ords) for (const m of modes) combos.push([oi, m]);
+    const t0 = Date.now(), budget = opts.budgetMs || 2000;
+    const over = () => Date.now() - t0 > budget;
+    // melhor empacotamento em W×H (altura livre = H) -> menor área usada
+    const tryWidth = (W, H, first) => {
+      let res = null;
+      for (const [oi, m] of combos) {
+        if (res && over()) break;
+        const r = packInto(orders[oi], W, H, m);
+        if (!r) continue;
+        const area = r.usedW * r.usedH;
+        if (!res || area < res.area) res = { placements: r.placements, width: r.usedW, height: r.usedH, area };
+        if (first) return res;
+      }
+      return res;
+    };
     let best = null;
     if (opts.pow2) {
       const sizes = [];
@@ -83,25 +112,32 @@
       }
       sizes.sort((a, b) => a[0] * a[1] - b[0] * b[1] || Math.abs(a[0] - a[1]) - Math.abs(b[0] - b[1]));
       for (const [w, h] of sizes) {
-        const r = packInto(sorted, w, h);
+        const r = tryWidth(w, h, true);
         if (r) { best = { placements: r.placements, width: w, height: h }; break; }
       }
     } else {
       const base = Math.sqrt(total);
       const lo = Math.max(maxW, Math.floor(base));
       const hi = Math.min(maxSize, Math.max(lo + 1, Math.ceil(base * 1.9)));
-      const cands = new Set();
-      const steps = 14;
-      for (let i = 0; i <= steps; i++) cands.add(Math.round(lo + ((hi - lo) * i) / steps));
-      cands.add(Math.min(maxSize, Math.max(maxW, Math.ceil(base * 1.05))));
-      for (const w of cands) {
-        const r = packInto(sorted, w, maxSize);
-        if (!r) continue;
-        const area = r.usedW * r.usedH;
-        const ratio = Math.max(r.usedW, r.usedH) / Math.min(r.usedW, r.usedH);
-        if (!best || area < best.area || (area === best.area && ratio < best.ratio)) {
-          best = { placements: r.placements, width: r.usedW, height: r.usedH, area, ratio };
-        }
+      const consider = (w) => {
+        if (w < maxW || w > maxSize) return;
+        const r = tryWidth(w, maxSize, false);
+        if (!r) return;
+        const ratio = Math.max(r.width, r.height) / Math.min(r.width, r.height);
+        if (!best || r.area < best.area || (r.area === best.area && ratio < best.ratio)) best = Object.assign(r, { ratio });
+      };
+      const seen = new Set();
+      const tryW = (w) => { w = Math.round(w); if (!seen.has(w)) { seen.add(w); consider(w); } };
+      // varredura grossa
+      const steps = rects.length > 3000 ? 8 : 16;
+      for (let i = 0; i <= steps; i++) tryW(lo + ((hi - lo) * i) / steps);
+      tryW(Math.ceil(base * 1.05));
+      // refinamento: busca local ao redor do melhor, com passos cada vez menores
+      let span = (hi - lo) / steps;
+      for (let round = 0; round < 5 && best && !over() && span >= 1; round++) {
+        const c = best.width;
+        for (let k = -3; k <= 3; k++) tryW(c + (k * span) / 3);
+        span /= 3;
       }
     }
     if (!best) throw new Error('Os frames não cabem em um atlas de ' + maxSize + '×' + maxSize + ' px. Reduza a escala ou aumente o tamanho máximo.');
