@@ -129,7 +129,11 @@ const kb = (n) => (n / 1024).toFixed(1) + 'KB';
     assert.ok(B2.validation.ok && B2.validation.psnrMin > 30);
     console.log('  ok rotated="true" idêntico ao atlas sem rotação (S=1) e ok com S=0.5');
   }
-  await assert.rejects(() => FNF.optimizeAtlas({ ...atlas, xmlText: atlas.xmlText.replace('x="0" y="0"', 'x="990" y="0"') }, {}), /outside the PNG/);
+  {
+    // frame apontando além do PNG: tolerado (área faltante vira transparente) com aviso
+    const big = await FNF.optimizeAtlas({ ...atlas, xmlText: atlas.xmlText.replace('x="0" y="0"', 'x="' + (FNF.parseSparrow(atlas.xmlText).frames[0].x + 5000) + '" y="0"') }, { scale: 1 });
+    assert.ok(big.warnings.some((w) => /outside the image/.test(w)) && big.validation.ok, 'deve tolerar frame fora do PNG');
+  }
   await assert.rejects(() => FNF.optimizeAtlas({ ...atlas, xmlText: '<foo/>' }, {}), /TextureAtlas/);
   console.log('  ok erros de entrada');
 

@@ -237,13 +237,27 @@
       if (!sp.frames.length) throw new Error(FNF.t('pl.err.allremoved'));
       warnings.push(FNF.t('pl.warn.removed', { n: before - sp.frames.length }));
     }
-    for (const f of sp.frames) {
-      if (f.w <= 0 || f.h <= 0) throw new Error(FNF.t('pl.err.zero', { name: f.name }));
-      if (f.x < 0 || f.y < 0 || f.x + f.w > img.width || f.y + f.h > img.height) {
-        throw new Error(FNF.t('pl.err.bounds', { name: f.name, x: f.x, y: f.y, w: f.w, h: f.h, iw: img.width, ih: img.height }));
+    {
+      // XMLs reais às vezes apontam um pouco além do PNG, ou têm frames vazios: tolera em vez de falhar.
+      const empty = sp.frames.filter((f) => f.w <= 0 || f.h <= 0);
+      if (empty.length) {
+        const drop = new Set(empty);
+        sp.frames = sp.frames.filter((f) => !drop.has(f));
+        warnings.push(FNF.t('pl.warn.emptyframes', { n: empty.length }));
+        if (!sp.frames.length) throw new Error(FNF.t('pl.err.allremoved'));
+      }
+      let needW = img.width, needH = img.height, outside = 0;
+      for (const f of sp.frames) {
+        if (f.x < 0 || f.y < 0) throw new Error(FNF.t('pl.err.bounds', { name: f.name, x: f.x, y: f.y, w: f.w, h: f.h, iw: img.width, ih: img.height }));
+        if (f.x + f.w > img.width || f.y + f.h > img.height) { outside++; needW = Math.max(needW, f.x + f.w); needH = Math.max(needH, f.y + f.h); }
+      }
+      if (outside) {
+        const data = new Uint8Array(needW * needH * 4);
+        for (let y = 0; y < img.height; y++) data.set(img.data.subarray(y * img.width * 4, (y + 1) * img.width * 4), y * needW * 4);
+        img.data = data; img.width = needW; img.height = needH;
+        warnings.push(FNF.t('pl.warn.outside', { n: outside, w: needW, h: needH }));
       }
     }
-
     // entradas: cada frame com seu bitmap e a posição do bitmap dentro do frame virtual
     const regionCache = new Map();
     let pixelsBefore = 0;
