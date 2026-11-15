@@ -6,6 +6,7 @@
   const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
 
   const DEFAULTS = {
+    resizeNoConfig: false,  // (ZIP) também reduz atlas que não têm config de personagem
     allowRotate: false,     // gira sprites 90° no atlas (rotated="true") para compactar mais
     turbo: true,            // validação mais rápida
     format: 'auto',         // 'auto' (mesmo do original) | 'png' | 'astc'

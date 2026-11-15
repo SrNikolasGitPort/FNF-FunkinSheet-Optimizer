@@ -34,14 +34,15 @@
   <section class="card" id="sec-files" aria-labelledby="h-files">
     <h2 id="h-files"><span class="n">1</span><span data-pt="Arquivos">Files</span></h2>
     <div id="drop" class="drop" tabindex="0" role="button">
-      <strong data-pt="Arraste os arquivos (ou a pasta do personagem) para cá">Drop your files (or the character folder) here</strong>
-      <span data-pt="Atlas PNG ou ASTC + XML Sparrow. Opcional: JSON do Psych Engine ou config.json + offsets.txt do Leather Engine.">Atlas PNG or ASTC + Sparrow XML. Optional: Psych Engine JSON, or Leather Engine config.json + offsets.txt.</span>
+      <strong data-pt="Arraste um ZIP, os arquivos ou a pasta para cá">Drop a ZIP, your files or a folder here</strong>
+      <span data-pt="Com um ZIP (mod, pasta de personagens…) o site acha e otimiza os sprites onde estiverem, junto com os JSON do Psych e config.json + offsets.txt do Leather, e devolve um ZIP com a mesma estrutura. Também funciona com atlas PNG/ASTC + XML soltos.">With a ZIP (a mod, a characters folder…) the site finds and optimizes the sprites wherever they are, together with Psych JSONs and Leather config.json + offsets.txt, and gives you back a ZIP with the same structure. Loose PNG/ASTC + XML atlases work too.</span>
       <div class="row">
+        <button type="button" id="btn-zip-pick" class="btn primary" data-pt="Escolher ZIP">Choose ZIP</button>
         <button type="button" id="btn-pick" class="btn" data-pt="Escolher arquivos">Choose files</button>
         <button type="button" id="btn-folder" class="btn ghost" data-pt="Escolher pasta">Choose folder</button>
       </div>
     </div>
-    <input type="file" id="in-files" multiple hidden accept=".png,.astc,.xml,.json,.txt">
+    <input type="file" id="in-files" multiple hidden accept=".zip,.png,.astc,.xml,.json,.txt">
     <input type="file" id="in-folder" hidden webkitdirectory multiple>
     <div id="file-summary" class="summary" aria-live="polite"></div>
   </section>
@@ -84,6 +85,7 @@
     </div>
     <div class="toggles">
       <label class="tog"><input type="checkbox" data-opt="adjustOffsets"><span data-pt="<b>Manter o personagem alinhado</b> ajusta o scale e os offsets do config para ficar igual ao original"><b>Keep the character aligned</b> adjusts the config scale and offsets so it looks like the original</span></label>
+      <label class="tog"><input type="checkbox" data-opt="resizeNoConfig"><span data-pt="<b>Redimensionar atlas sem config</b> (só em ZIP): por padrão, só personagens com config são reduzidos; o resto fica em 1.0× para o tamanho no jogo não mudar"><b>Resize atlases without a config</b> (ZIP only): by default only characters with a config are shrunk; everything else stays at 1.0× so in-game size does not change</span></label>
       <label class="tog"><input type="checkbox" data-opt="allowRotate"><span data-pt="<b>Permitir rotação</b> gira sprites 90° para compactar mais (usa rotated=&quot;true&quot;; a engine precisa suportar)"><b>Allow rotation</b> rotates sprites 90° to pack tighter (uses rotated=&quot;true&quot;; your engine must support it)</span></label>
     </div>
 
@@ -131,6 +133,17 @@
       <span id="progress-text">…</span>
     </div>
     <div id="run-error" class="alert error" role="alert" hidden></div>
+  </section>
+
+  <section id="sec-zip" class="card" hidden aria-labelledby="h-zip">
+    <div class="res-head">
+      <h2 id="h-zip"><span class="n">4</span><span data-pt="Resultado do ZIP">ZIP result</span></h2>
+      <button type="button" id="zip-dl" class="btn primary" data-pt="Baixar ZIP otimizado">Download optimized ZIP</button>
+    </div>
+    <div id="zip-summary"></div>
+    <div id="zip-notes"></div>
+    <div id="zip-table" class="c-list"></div>
+    <div class="row"><button type="button" id="zip-report" class="btn" data-pt="Baixar relatório (.txt)">Download report (.txt)</button></div>
   </section>
 
   <section id="sec-results" class="card" hidden aria-labelledby="h-res">
@@ -226,6 +239,7 @@
 <script defer src="js/pack.js"></script>
 <script defer src="js/config.js"></script>
 <script defer src="js/pipeline.js"></script>
+<script defer src="js/zipjob.js"></script>
 <script defer src="js/compress.js"></script>
 <script defer src="js/app.js"></script>
 </body>

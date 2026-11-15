@@ -279,24 +279,28 @@
     const locals = [], centrals = [];
     let offset = 0;
     for (const f of files) {
-      const name = FNF.textEncode(f.path.replace(/^\/+/, ''));
-      let method = 0, body = f.data;
-      if (f.deflate) {
-        const d = await FNF.deflateRaw(f.data);
-        if (d.length < f.data.length) { method = 8; body = d; }
+      const name = f.nameBytes || FNF.textEncode(f.path.replace(/^\/+/, ''));
+      const flags = f.flags !== undefined ? f.flags : 0x0800;
+      let method = 0, body = f.data, crc, usize;
+      if (f.raw) { method = f.raw.method; body = f.raw.body; crc = f.raw.crc; usize = f.raw.usize; } // entrada copiada sem recomprimir
+      else {
+        if (f.deflate) {
+          const d = await FNF.deflateRaw(f.data);
+          if (d.length < f.data.length) { method = 8; body = d; }
+        }
+        crc = FNF.crc32(f.data); usize = f.data.length;
       }
-      const crc = FNF.crc32(f.data);
       const lh = new Uint8Array(30 + name.length);
       const lv = new DataView(lh.buffer);
-      lv.setUint32(0, 0x04034b50, true); lv.setUint16(4, 20, true); lv.setUint16(6, 0x0800, true); lv.setUint16(8, method, true);
+      lv.setUint32(0, 0x04034b50, true); lv.setUint16(4, 20, true); lv.setUint16(6, flags, true); lv.setUint16(8, method, true);
       lv.setUint16(10, time, true); lv.setUint16(12, date, true); lv.setUint32(14, crc, true);
-      lv.setUint32(18, body.length, true); lv.setUint32(22, f.data.length, true); lv.setUint16(26, name.length, true);
+      lv.setUint32(18, body.length, true); lv.setUint32(22, usize, true); lv.setUint16(26, name.length, true);
       lh.set(name, 30);
       const ch = new Uint8Array(46 + name.length);
       const cv = new DataView(ch.buffer);
-      cv.setUint32(0, 0x02014b50, true); cv.setUint16(4, 20, true); cv.setUint16(6, 20, true); cv.setUint16(8, 0x0800, true);
+      cv.setUint32(0, 0x02014b50, true); cv.setUint16(4, 20, true); cv.setUint16(6, 20, true); cv.setUint16(8, flags, true);
       cv.setUint16(10, method, true); cv.setUint16(12, time, true); cv.setUint16(14, date, true); cv.setUint32(16, crc, true);
-      cv.setUint32(20, body.length, true); cv.setUint32(24, f.data.length, true); cv.setUint16(28, name.length, true);
+      cv.setUint32(20, body.length, true); cv.setUint32(24, usize, true); cv.setUint16(28, name.length, true);
       cv.setUint32(42, offset, true);
       ch.set(name, 46);
       locals.push(lh, body); centrals.push(ch);
@@ -310,5 +314,44 @@
     return FNF.concat([...locals, ...centrals, end]);
   }
 
-  Object.assign(FNF, { parseJSONSpans, adjustPsychConfig, adjustLeatherConfig, scaleOffsetsText, shiftOffsetsText, pairFiles, detectConfigKind, makeZip, baseOf, dirOf });
+  /** Lê o diretório central de um .zip (sem descompactar). Retorna [{path, nameBytes, flags, method, crc, csize, usize, offset, dir}]. */
+  function listZip(bytes) {
+    const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    let eocd = -1;
+    for (let i = bytes.length - 22; i >= Math.max(0, bytes.length - 22 - 65535); i--) if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+    if (eocd < 0) throw new Error(FNF.t('zip.err.invalid'));
+    const count = dv.getUint16(eocd + 10, true), cdSize = dv.getUint32(eocd + 12, true), cdOff = dv.getUint32(eocd + 16, true);
+    if (count === 0xffff || cdSize === 0xffffffff || cdOff === 0xffffffff) throw new Error(FNF.t('zip.err.zip64'));
+    const out = [];
+    let p = cdOff;
+    for (let n = 0; n < count; n++) {
+      if (p + 46 > bytes.length || dv.getUint32(p, true) !== 0x02014b50) throw new Error(FNF.t('zip.err.invalid'));
+      const flags = dv.getUint16(p + 8, true), method = dv.getUint16(p + 10, true), crc = dv.getUint32(p + 16, true);
+      const csize = dv.getUint32(p + 20, true), usize = dv.getUint32(p + 24, true);
+      const nl = dv.getUint16(p + 28, true), el = dv.getUint16(p + 30, true), cl = dv.getUint16(p + 32, true), offset = dv.getUint32(p + 42, true);
+      if (csize === 0xffffffff || usize === 0xffffffff || offset === 0xffffffff) throw new Error(FNF.t('zip.err.zip64'));
+      const nameBytes = bytes.slice(p + 46, p + 46 + nl);
+      let path = FNF.textDecode(nameBytes).replace(/\\/g, '/');
+      out.push({ path, nameBytes, flags, method, crc, csize, usize, offset, dir: path.endsWith('/'), encrypted: !!(flags & 1) });
+      p += 46 + nl + el + cl;
+    }
+    return out;
+  }
+  /** Conteúdo bruto (comprimido) de uma entrada. */
+  function zipRaw(bytes, e) {
+    const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    if (e.offset + 30 > bytes.length || dv.getUint32(e.offset, true) !== 0x04034b50) throw new Error(FNF.t('zip.err.invalid'));
+    const start = e.offset + 30 + dv.getUint16(e.offset + 26, true) + dv.getUint16(e.offset + 28, true);
+    return bytes.subarray(start, start + e.csize);
+  }
+  /** Conteúdo descompactado de uma entrada. */
+  async function zipData(bytes, e) {
+    if (e.encrypted) throw new Error(FNF.t('zip.err.encrypted'));
+    const raw = zipRaw(bytes, e);
+    if (e.method === 0) return raw.slice();
+    if (e.method === 8) return FNF.inflateRaw(raw);
+    throw new Error(FNF.t('zip.err.method', { m: e.method }));
+  }
+
+  Object.assign(FNF, { listZip, zipRaw, zipData, parseJSONSpans, adjustPsychConfig, adjustLeatherConfig, scaleOffsetsText, shiftOffsetsText, pairFiles, detectConfigKind, makeZip, baseOf, dirOf });
 })(typeof self !== 'undefined' ? self : globalThis);

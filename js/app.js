@@ -64,6 +64,16 @@
 
   // ------------------------------------------------------------------ arquivos
   async function addEntries(list) {
+    const zips = list.filter((x) => /\.zip$/i.test(x.file.name || x.path));
+    if (zips.length) {
+      const z = zips[zips.length - 1];
+      const bytes = new Uint8Array(await z.file.arrayBuffer());
+      state.files = []; state.zipResult = null; $('#sec-zip').hidden = true;
+      try { state.zip = { name: z.file.name || z.path, bytes, scan: FNF.scanZip(bytes) }; }
+      catch (e) { state.zip = null; refreshFiles(); showError((e && e.message) || String(e)); return; }
+      showError(''); refreshFiles(); return;
+    }
+    if (state.zip) { state.zip = null; $('#sec-zip').hidden = true; }
     for (const { file, path } of list) {
       const bytes = new Uint8Array(await file.arrayBuffer());
       const p = path.replace(/\\/g, '/');
@@ -94,7 +104,18 @@
     return out;
   }
 
+  const canRun = () => !!state.zip || !!(state.paired && state.paired.atlases.length);
   function refreshFiles() {
+    if (state.zip) {
+      const z = state.zip, sc = z.scan;
+      state.paired = { atlases: [], configs: [], problems: [] };
+      $('#file-summary').innerHTML = '<div class="group"><span class="lbl">ZIP</span><span class="chip">' + esc(z.name) + ' <small>' + fmtBytes(z.bytes.length) + '</small><button type="button" id="btn-clear" aria-label="' + L('Remove', 'Remover') + '">×</button></span></div>' +
+        '<div class="note">' + L('{a} atlas found among {f} files. Everything else is copied back untouched.', '{a} atlas encontrado(s) entre {f} arquivos. O resto volta sem alteração.', { a: sc.atlases, f: sc.files }) + '</div>' +
+        (sc.atlases ? '' : '<div class="note warn">' + L('No atlas (PNG/ASTC + XML) in this ZIP.', 'Nenhum atlas (PNG/ASTC + XML) neste ZIP.') + '</div>');
+      $('#btn-run').disabled = state.running || !sc.atlases;
+      renderRemoval();
+      return;
+    }
     state.paired = FNF.pairFiles(state.files);
     const p = state.paired;
     const box = $('#file-summary');
@@ -197,8 +218,68 @@
     });
   }
 
+  function runZipInWorker(payload) {
+    return new Promise((resolve, reject) => {
+      let w;
+      try { w = state.warm || new Worker('js/worker.js'); state.warm = null; } catch (e) { reject({ fallback: true }); return; }
+      state.worker = w; let started = false;
+      w.onmessage = (ev) => {
+        started = true; const m = ev.data;
+        if (m.type === 'progress') setProgress(m.stage, m.pct);
+        else if (m.type === 'done') { w.terminate(); state.worker = null; resolve(m.zipResult); }
+        else if (m.type === 'error') { w.terminate(); state.worker = null; reject({ message: m.message }); }
+      };
+      w.onerror = (ev) => { w.terminate(); state.worker = null; if (!started) reject({ fallback: true }); else reject({ message: ev.message || L('Processing error.', 'Erro no processamento.') }); };
+      w.postMessage({ type: 'zip', lang: FNF.lang, zipBytes: state.zip.bytes.slice(), opts: payload.opts });
+    });
+  }
+  async function runZip() {
+    const opts = readOpts(); saveOpts();
+    state.running = true; state.cancel = false; state.t0 = 0;
+    $('#btn-run').disabled = true; $('#btn-cancel').hidden = false; showError('');
+    $('#sec-results').hidden = true; $('#sec-zip').hidden = true;
+    setProgress(L('Starting…', 'Iniciando…'), 0);
+    try {
+      let res;
+      try { res = await runZipInWorker({ opts }); }
+      catch (e) {
+        if (e && e.fallback) {
+          setProgress(L('Processing on the main thread…', 'Processando na página principal…'), 0);
+          res = await FNF.processZip(state.zip.bytes, opts, async (stage, pct) => { if (state.cancel) throw new Error(L('Cancelled.', 'Cancelado.')); setProgress(stage, pct); await new Promise((r) => setTimeout(r, 0)); });
+        } else throw e;
+      }
+      state.zipResult = res; renderZipResult(res); stopProgress();
+    } catch (e) {
+      stopProgress();
+      if (!state.cancel) showError((e && e.message) || String(e));
+    } finally {
+      state.running = false; state.worker = null; prewarm();
+      $('#btn-cancel').hidden = true; $('#btn-run').disabled = !canRun();
+    }
+  }
+  function renderZipResult(res) {
+    const t = res.totals, d = FNF.delta(t.zipBefore, t.zipAfter);
+    $('#zip-summary').innerHTML = '<b>' + fmtBytes(t.zipBefore) + ' → ' + fmtBytes(t.zipAfter) + '</b> <span class="d ' + (t.zipAfter <= t.zipBefore ? 'good' : 'bad') + '">' + d + '</span> · ' +
+      L('{a} atlas optimized, {c} config(s) adjusted', '{a} atlas otimizado(s), {c} config(s) ajustado(s)', { a: t.atlases, c: t.configs }) +
+      (t.kept ? ' · ' + L('{n} kept as is', '{n} mantido(s) como estava(m)', { n: t.kept }) : '') +
+      (t.failed ? ' · <span class="d bad">' + L('{n} failed (originals kept)', '{n} com falha (originais mantidos)', { n: t.failed }) + '</span>' : '');
+    $('#zip-notes').innerHTML = res.problems.map((p) => '<div class="note ' + (p.level === 'warn' ? 'warn' : '') + '">' + esc(p.msg) + '</div>').join('');
+    $('#zip-table').innerHTML = res.rows.map((r) => '<div class="zrow ' + (r.status === 'error' ? 'err' : r.status === 'kept' ? 'kept' : '') + '"><span class="nm" title="' + esc(r.path) + '">' + esc(r.path) + '</span><span>' +
+      fmtBytes(r.before) + ' → ' + fmtBytes(r.after) + ' ' + deltaHtml(r.before, r.after) + '</span>' +
+      (r.status === 'ok' ? '<span class="sub">' + (r.atlasBefore ? r.atlasBefore.w + '×' + r.atlasBefore.h + ' → ' + r.atlasAfter.w + '×' + r.atlasAfter.h : '') + (r.scale < 1 ? ' · ' + L('scale', 'escala') + ' ' + r.scale : '') + '</span>' : '<span class="sub">' + esc(r.note) + '</span>') + '</div>').join('');
+    $('#sec-zip').hidden = false;
+    $('#sec-zip').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+  function saveBlob(bytes, type, name) {
+    const url = URL.createObjectURL(new Blob([bytes], { type }));
+    const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+  }
+
   async function run() {
-    if (state.running || !state.paired || !state.paired.atlases.length) return;
+    if (state.running) return;
+    if (state.zip) return runZip();
+    if (!state.paired || !state.paired.atlases.length) return;
     const opts = readOpts();
     saveOpts();
     const p = state.paired;
@@ -225,7 +306,7 @@
       if (!state.cancel) showError((e && e.message) || String(e));
     } finally {
       state.running = false; state.worker = null; prewarm();
-      $('#btn-cancel').hidden = true; $('#btn-run').disabled = !(state.paired && state.paired.atlases.length);
+      $('#btn-cancel').hidden = true; $('#btn-run').disabled = !canRun();
     }
   }
   function prewarm() {
@@ -236,7 +317,7 @@
     if (state.worker) { state.worker.terminate(); state.worker = null; }
     state.running = false;
     stopProgress(); $('#btn-cancel').hidden = true;
-    $('#btn-run').disabled = !(state.paired && state.paired.atlases.length);
+    $('#btn-run').disabled = !canRun();
     showError(L('Optimization cancelled.', 'Otimização cancelada.'));
   }
 
@@ -732,6 +813,9 @@
     $('#c-drop').addEventListener('drop', async (e) => { e.preventDefault(); e.stopPropagation(); await addImages(Array.from(e.dataTransfer.files)); });
 
     const drop = $('#drop');
+    $('#btn-zip-pick').addEventListener('click', (e) => { e.stopPropagation(); $('#in-files').click(); });
+    $('#zip-dl').addEventListener('click', () => { if (state.zipResult) saveBlob(state.zipResult.zip, 'application/zip', (state.zip ? state.zip.name.replace(/\.zip$/i, '') : 'mod') + '-optimized.zip'); });
+    $('#zip-report').addEventListener('click', () => { if (state.zipResult) saveBlob(FNF.textEncode(state.zipResult.report), 'text/plain', 'optimizer-report.txt'); });
     $('#btn-pick').addEventListener('click', (e) => { e.stopPropagation(); $('#in-files').click(); });
     $('#btn-folder').addEventListener('click', (e) => { e.stopPropagation(); $('#in-folder').click(); });
     drop.addEventListener('click', () => $('#in-files').click());
@@ -754,7 +838,7 @@
     $('#file-summary').addEventListener('click', (e) => {
       const t = e.target.closest('button'); if (!t) return;
       const p = state.paired;
-      if (t.id === 'btn-clear') { state.files = []; refreshFiles(); }
+      if (t.id === 'btn-clear') { state.files = []; state.zip = null; $('#sec-zip').hidden = true; refreshFiles(); }
       else if (t.dataset.rmAtlas !== undefined) { const a = p.atlases[+t.dataset.rmAtlas]; removePaths([a.dir + a.pngName, a.dir + a.xmlName]); }
       else if (t.dataset.rmConfig !== undefined) { const c = p.configs[+t.dataset.rmConfig]; removePaths([c.dir + c.name].concat(c.offsets ? [c.dir + c.offsets.name] : [])); }
     });

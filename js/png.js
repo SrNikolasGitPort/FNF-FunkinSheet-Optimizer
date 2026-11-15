@@ -23,6 +23,7 @@
   }
   const inflate = (b) => pipe(b, new DecompressionStream('deflate'));
   const deflate = (b) => pipe(b, new CompressionStream('deflate'));
+  const inflateRaw = (b) => pipe(b, new DecompressionStream('deflate-raw'));
   const deflateRaw = (b) => pipe(b, new CompressionStream('deflate-raw'));
 
   let CRC_TABLE = null;
@@ -453,7 +454,7 @@
   }
 
   Object.assign(FNF, {
-    concat, inflate, deflate, deflateRaw, crc32, decodePNG, encodePNG, quantize, exactPalette,
+    concat, inflate, inflateRaw, deflate, deflateRaw, crc32, decodePNG, encodePNG, quantize, exactPalette,
     textEncode: (s) => te.encode(s),
     textDecode: (b) => tdKeepBOM.decode(b),
   });

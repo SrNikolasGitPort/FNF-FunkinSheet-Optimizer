@@ -189,3 +189,11 @@ main[hidden]{display:none}
 .rm-frames{display:flex;flex-wrap:wrap;gap:6px 12px;padding:8px 0 2px}
 .rm-frames label{font-size:.85rem;display:flex;gap:4px;align-items:center}
 .rm-atlas{font-weight:600;margin-top:6px}
+
+.zrow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 12px;padding:9px 12px;border:1px solid #ffffff1f;border-radius:10px;font-size:.92rem}
+.zrow .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+.zrow .sub{grid-column:1/-1;color:var(--muted,#9aa);font-size:.85rem}
+.zrow.err{border-color:#ff6b6b66}.zrow.kept{opacity:.8}
+#zip-summary{font-size:1.05rem;margin:6px 0 10px}
+#zip-notes .note{margin:6px 0}
+#rm-box[hidden]{display:none!important}

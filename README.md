@@ -46,6 +46,7 @@ Node 18+:
 
 ```bash
 node tests/png.test.js        # PNG decoder/encoder
+node tests/zipjob.test.js     # ZIP mode
 node tests/pipeline.test.js   # pipeline, rotated, offsets, configs, ZIP
 node tests/astc.test.js       # ASTC encode/decode round trips and pipeline
 node tests/compress.test.js   # image compressor
@@ -73,6 +74,16 @@ js/demo.js       example character
 js/app.js        UI
 tests/           automated tests
 ```
+
+## ZIP mode
+
+Drop (or **Choose ZIP**) a whole mod / characters folder as a `.zip`. The site finds every atlas (PNG or ASTC + XML) and every character config (Psych JSON, Leather `config.json` + `offsets.txt`) wherever they are, optimizes them in place and hands back a ZIP with the **same structure**. Details:
+
+- Each config is paired with the atlas that matches its `image` / `imagePath` (preferring the same folder, so two mods with the same atlas name don't get mixed). Scale, offsets and atlas always stay in sync.
+- Atlases without a character config (stages, UI…) are kept at 1.0× by default so in-game size doesn't change; **Advanced → Resize atlases without a config** overrides that.
+- Everything else (audio, scripts, charts, icons, PNGs without XML) is copied back untouched, without recompressing.
+- If an atlas fails validation or errors, its original files are kept; if the result isn't smaller at 1.0×, the original is kept too. An `optimizer-report.txt` is added to the ZIP.
+- Limits: no password-protected or ZIP64 (>4 GB) archives.
 
 ## Turbo
 
