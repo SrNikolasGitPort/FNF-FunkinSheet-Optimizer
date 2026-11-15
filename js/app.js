@@ -664,8 +664,13 @@
     $('#c-zip').hidden = !C.out.length || C.out.length < C.files.length || C.files.length < 2;
   }
   async function addImages(list) {
-    for (const f of list) C.files.push({ name: f.name, bytes: new Uint8Array(await f.arrayBuffer()) });
+    let skipped = 0;
+    for (const f of list) {
+      if (!/\.(png|astc)$/i.test(f.name)) { skipped++; continue; }
+      C.files.push({ name: f.name, bytes: new Uint8Array(await f.arrayBuffer()) });
+    }
     C.out = []; renderCompress();
+    $('#c-progress').textContent = skipped ? L('Only PNG and ASTC are supported: {n} file(s) ignored.', 'Só PNG e ASTC são suportados: {n} arquivo(s) ignorado(s).', { n: skipped }) : '';
   }
   async function previewUrl(res) {
     try {
@@ -685,7 +690,7 @@
         await new Promise((r) => setTimeout(r, 20));
         try {
           const r = await FNF.compressImage(C.files[i], opts, () => new Promise((res) => setTimeout(res, 0)));
-          const mime = { png: 'image/png', webp: 'image/webp', jpg: 'image/jpeg', astc: 'application/octet-stream' }[r.name.split('.').pop()] || 'application/octet-stream';
+          const mime = { png: 'image/png', astc: 'application/octet-stream' }[r.name.split('.').pop()] || 'application/octet-stream';
           r.url = URL.createObjectURL(new Blob([r.bytes], { type: mime })); C.urls.push(r.url);
           r.preview = (await previewUrl(r)) || r.url;
           C.out[i] = r;

@@ -27,7 +27,7 @@ What it does:
 
 ## Compress images
 
-A separate tab for any PNG / JPG / WebP / ASTC: choose **Lossless**, **High**, **Balanced** or **Smallest**. It searches for the smallest file whose measured quality (PSNR on premultiplied alpha) stays above the target — palette size for PNG, quality for WebP/JPEG, block size for ASTC. Invisible pixels are cleaned, and the original is kept if it can't be improved. Note: ASTC saves GPU memory (fixed size per block) but is often bigger on disk than a PNG with lots of transparency.
+A separate tab for any PNG / ASTC (other formats are not supported): choose **Lossless**, **High**, **Balanced** or **Smallest**. It searches for the smallest file whose measured quality (PSNR on premultiplied alpha) stays above the target — palette size for PNG, block size for ASTC. Invisible pixels are cleaned, and the original is kept if it can't be improved. Note: ASTC saves GPU memory (fixed size per block) but is often bigger on disk than a PNG with lots of transparency.
 
 ## Notes
 

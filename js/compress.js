@@ -1,4 +1,4 @@
-/* compress.js — compressão de imagens (PNG / WebP / JPEG / ASTC) priorizando leveza com qualidade medida (PSNR). */
+/* compress.js — compressão de imagens (PNG / ASTC) priorizando leveza com qualidade medida (PSNR). */
 (function (root) {
   'use strict';
   const FNF = (root.FNF = root.FNF || {});
@@ -18,32 +18,11 @@
   const isAstc = (b) => b.length > 16 && b[0] === 0x13 && b[1] === 0xab && b[2] === 0xa1 && b[3] === 0x5c;
   const isPng = (b) => b.length > 8 && b[0] === 0x89 && b[1] === 0x50;
 
-  function canvasFor(w, h) {
-    if (typeof OffscreenCanvas !== 'undefined') return new OffscreenCanvas(w, h);
-    const c = document.createElement('canvas'); c.width = w; c.height = h; return c;
-  }
-  async function decodeBrowser(bytes) {
-    if (typeof createImageBitmap === 'undefined') throw new Error(FNF.t('cmp.err.nobrowser'));
-    const bmp = await createImageBitmap(new Blob([bytes]), { premultiplyAlpha: 'none', colorSpaceConversion: 'none' });
-    const c = canvasFor(bmp.width, bmp.height), ctx = c.getContext('2d', { willReadFrequently: true });
-    ctx.drawImage(bmp, 0, 0);
-    const d = ctx.getImageData(0, 0, bmp.width, bmp.height);
-    return { width: bmp.width, height: bmp.height, data: new Uint8Array(d.data.buffer) };
-  }
   async function decodeAny(bytes) {
     if (isAstc(bytes)) { const r = FNF.decodeASTC(bytes); return { width: r.width, height: r.height, data: r.data, kind: 'astc' }; }
     if (isPng(bytes)) { const r = await FNF.decodePNG(bytes); return { width: r.width, height: r.height, data: r.data, kind: 'png' }; }
-    const r = await decodeBrowser(bytes); r.kind = 'browser'; return r;
+    throw new Error(FNF.t('cmp.err.format'));
   }
-  async function browserEncode(rgba, w, h, mime, q) {
-    const c = canvasFor(w, h), ctx = c.getContext('2d');
-    ctx.putImageData(new ImageData(new Uint8ClampedArray(rgba.buffer.slice(rgba.byteOffset, rgba.byteOffset + rgba.byteLength)), w, h), 0, 0);
-    const blob = c.convertToBlob ? await c.convertToBlob({ type: mime, quality: q }) : await new Promise((res) => c.toBlob(res, mime, q));
-    if (!blob || blob.type !== mime) throw new Error(FNF.t('cmp.err.format', { mime }));
-    return new Uint8Array(await blob.arrayBuffer());
-  }
-
-  const hasAlpha = (d) => { for (let i = 3; i < d.length; i += 4) if (d[i] !== 255) return true; return false; };
 
   async function pngSmart(img, level, onStep) {
     const { width: w, height: h, data } = img;
@@ -83,20 +62,7 @@
     return last;
   }
 
-  async function lossySmart(img, mime, level, onStep) {
-    const { width: w, height: h, data } = img, target = TARGET[level] || 38;
-    let lo = 0.3, hi = 0.99, best = null;
-    for (let i = 0; i < 7; i++) {
-      if (onStep) await onStep();
-      const q = (lo + hi) / 2, bytes = await browserEncode(data, w, h, mime, q);
-      const dec = await decodeBrowser(bytes);
-      const p = psnrPremult(data, dec.data);
-      if (p >= target) { best = { bytes, kind: mime.split('/')[1].toUpperCase() + ' q' + Math.round(q * 100), psnr: p }; hi = q; } else lo = q;
-    }
-    return best || { bytes: await browserEncode(data, w, h, mime, 0.99), kind: mime.split('/')[1].toUpperCase() + ' q99', psnr: null };
-  }
-
-  /** input: {name, bytes}. opts: {format:'auto'|'png'|'webp'|'jpeg'|'astc', quality:'lossless'|'high'|'balanced'|'small', astcBlock} */
+  /** input: {name, bytes}. opts: {format:'auto'|'png'|'astc', quality:'lossless'|'high'|'balanced'|'small', astcBlock} */
   async function compressImage(input, opts, onStep) {
     const o = Object.assign({ format: 'auto', quality: 'balanced', astcBlock: 'auto' }, opts || {});
     const img = await decodeAny(input.bytes);
@@ -104,18 +70,15 @@
     const d = img.data;
     for (let i = 0; i < d.length; i += 4) if (d[i + 3] === 0) { d[i] = 0; d[i + 1] = 0; d[i + 2] = 0; }
     const warnings = [];
-    let fmt = o.format;
-    if (fmt === 'auto') fmt = img.kind === 'astc' ? 'astc' : img.kind === 'png' ? 'png' : (/\.webp$/i.test(input.name) ? 'webp' : 'jpeg');
-    if (fmt === 'jpeg' && hasAlpha(d)) { warnings.push(FNF.t('cmp.warn.jpegalpha')); fmt = 'png'; }
+    const fmt = o.format === 'astc' || o.format === 'png' ? o.format : img.kind;
     let r;
     if (fmt === 'png') r = await pngSmart(img, o.quality, onStep);
-    else if (fmt === 'astc') r = await astcSmart(img, o.quality === 'lossless' ? 'high' : o.quality, o.astcBlock, onStep);
-    else r = await lossySmart(img, fmt === 'webp' ? 'image/webp' : 'image/jpeg', o.quality === 'lossless' ? 'high' : o.quality, onStep);
-    const ext = { png: 'png', astc: 'astc', webp: 'webp', jpeg: 'jpg' }[fmt];
+    else r = await astcSmart(img, o.quality === 'lossless' ? 'high' : o.quality, o.astcBlock, onStep);
+    const ext = fmt;
     const base = input.name.replace(/\.[^.]+$/, '');
     let out = { name: base + '.' + ext, bytes: r.bytes, kind: r.kind, psnr: r.psnr, width: img.width, height: img.height, before: input.bytes.length, warnings, kept: false };
     // se não ficou menor no mesmo formato, mantém o original
-    const sameFmt = (fmt === 'png' && img.kind === 'png') || (fmt === 'astc' && img.kind === 'astc') || (o.format === 'auto' && fmt !== 'astc' && fmt !== 'png');
+    const sameFmt = (fmt === 'png' && img.kind === 'png') || (fmt === 'astc' && img.kind === 'astc');
     if (sameFmt && out.bytes.length >= input.bytes.length) {
       out = Object.assign(out, { name: input.name, bytes: input.bytes, kind: FNF.t('cmp.kept'), psnr: 99, kept: true });
     }

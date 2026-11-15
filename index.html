@@ -184,11 +184,11 @@
   <section class="card" aria-labelledby="h-cfiles">
     <h2 id="h-cfiles"><span class="n">1</span><span data-pt="Imagens">Images</span></h2>
     <div id="c-drop" class="drop" tabindex="0" role="button">
-      <strong data-pt="Arraste imagens para cá (PNG, JPG, WebP ou ASTC)">Drop images here (PNG, JPG, WebP or ASTC)</strong>
+      <strong data-pt="Arraste imagens para cá (PNG ou ASTC)">Drop images here (PNG or ASTC)</strong>
       <span data-pt="Mantém a qualidade medida (PSNR) e escolhe o menor arquivo possível.">Keeps measured quality (PSNR) and picks the smallest file it can.</span>
       <div class="row"><button type="button" id="c-pick" class="btn" data-pt="Escolher imagens">Choose images</button></div>
     </div>
-    <input type="file" id="c-in" multiple hidden accept=".png,.jpg,.jpeg,.webp,.astc,image/*">
+    <input type="file" id="c-in" multiple hidden accept=".png,.astc">
   </section>
   <section class="card" aria-labelledby="h-copts">
     <h2 id="h-copts"><span class="n">2</span><span data-pt="Compressão">Compression</span></h2>
@@ -203,7 +203,7 @@
       <div class="field"><label for="c-format" data-pt="Formato de saída">Output format</label>
         <select id="c-format">
           <option value="auto" data-pt="Igual ao original">Same as the original</option>
-          <option value="png">PNG</option><option value="webp">WebP</option><option value="jpeg">JPEG</option><option value="astc">ASTC</option>
+          <option value="png">PNG</option><option value="astc">ASTC</option>
         </select></div>
       <div class="field" id="c-astc-box" hidden><label for="c-astcblock" data-pt="Bloco ASTC">ASTC block size</label><select id="c-astcblock"></select></div>
     </div>
