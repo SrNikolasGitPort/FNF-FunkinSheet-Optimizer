@@ -235,6 +235,28 @@ const kb = (n) => (n / 1024).toFixed(1) + 'KB';
     console.log('  ok escala padrão fixa', d1.scale);
   }
 
+  // ---- 5b2) escala limpa: 0.5 → scale exatamente 2 mesmo com frames de tamanho ímpar; centro do frame alinhado
+  {
+    const fw = 553, fh = 617, W = 1600, H = 1400, d = new Uint8Array(W * H * 4);
+    for (let y = 0; y < fh - 20; y++) for (let x = 0; x < fw - 30; x++) d.set([x & 255, y & 255, 90, 255], (y * W + x) * 4);
+    const xml = '<TextureAtlas imagePath="a.png"><SubTexture name="idle0000" x="0" y="0" width="' + (fw - 30) + '" height="' + (fh - 20) + '" frameX="-5" frameY="-3" frameWidth="' + fw + '" frameHeight="' + fh + '"/></TextureAtlas>';
+    const png = (await FNF.encodePNG(d, W, H, { mode: 'rgba' })).bytes;
+    const mk = (kind, sc0) => kind === 'psych'
+      ? '{"animations":[{"anim":"idle","name":"idle","offsets":[10,20]}],"image":"a","scale":' + sc0 + '}'
+      : '{"imagePath":"a","animations":[{"name":"idle","animation_name":"idle"}],"scale":' + sc0 + '}';
+    for (const [kind, s0] of [['psych', 1], ['psych', 1.2], ['leather', 1]]) {
+      const cfg = mk(kind, s0);
+      const bb = await FNF.runBatch({ atlases: [{ name: 'a', dir: '', pngBytes: png, xmlText: xml }], configs: [{ kind, name: 'c.json', dir: '', text: cfg, bytes: FNF.textEncode(cfg), offsets: null }], opts: { scale: 0.5 } });
+      const j1 = JSON.parse(bb.configs[0].text), r = bb.results[0];
+      assert.strictEqual(j1.scale, s0 * 2, kind + ' scale deve ser exatamente ' + s0 * 2 + ', veio ' + j1.scale);
+      if (kind === 'psych') { // ponto central do frame fica no mesmo lugar da tela
+        const C = [fw / 2, fh / 2], C1 = [r.ref.fw1 / 2, r.ref.fh1 / 2], o0 = [10, 20], o1 = j1.animations[0].offsets;
+        for (let k = 0; k < 2; k++) { const a = -o0[k] + C[k], b = -o1[k] + C1[k] + j1.scale * (C[k] * (k ? r.Sy : r.Sx) - C1[k]); assert.ok(Math.abs(a - b) < 0.01, 'centro desalinhado'); }
+      }
+    }
+    console.log('  ok escala 0.5 → config exatamente ×2 (frames ímpares)');
+  }
+
   // ---- 5c) remover animações / frames
   {
     const names = FNF.parseSparrow(atlas.xmlText).frames.map((f) => f.name);

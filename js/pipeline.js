@@ -531,7 +531,10 @@
       const prim = cfgPrimary.get(c);
       const pr = prim && results.get(prim);
       const seff = pr ? pr.seff : 1;
-      const invScale = 1 / seff;
+      // multiplicador "limpo": 1 ÷ escala escolhida (0.5 → 2). O fator real (seff) só difere por arredondar o tamanho dos frames
+      // (≈0,1–0,3%); o alinhamento no centro do frame continua exato. Só usa o fator real se a diferença for grande (sprites minúsculos).
+      const exactOk = pr && typeof pr.scale === 'number' && Math.abs(seff / pr.scale - 1) <= 0.01;
+      const invScale = exactOk ? 1 / pr.scale : 1 / seff;
       const noScale = Math.abs(invScale - 1) < 1e-9;
       const shift = opts.adjustOffsets && pr && pr.ref && !noScale ? { dx: (pr.ref.fw1 - pr.ref.fw0) / 2, dy: (pr.ref.fh1 - pr.ref.fh0) / 2 } : null;
       const copts = { invScale: noScale ? 1 : invScale, rename, addScaleField: opts.addScaleField, skipScale: noScale, offsetShift: shift };
