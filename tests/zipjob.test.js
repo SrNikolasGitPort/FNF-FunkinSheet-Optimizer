@@ -79,6 +79,30 @@ const psychCfg = (img) => '{\n\t"animations": [\n\t\t{ "anim": "idle", "name": "
   await assert.rejects(() => FNF.processZip(new Uint8Array(100), {}), /ZIP/);
   const zEmpty = await FNF.makeZip([{ path: 'a.txt', data: T('x') }]);
   await assert.rejects(() => FNF.processZip(zEmpty, {}), /No atlas/);
+  // vários personagens do Leather: cada um com config.json + offsets.txt na própria pasta (mesmos nomes de arquivo)
+  {
+    const a1 = await makeAtlas(5, 'idle'), a2 = await makeAtlas(6, 'idle');
+    const lc = (img, extra) => JSON.stringify(Object.assign({ animations: [{ name: 'idle', animation_name: 'idle' }], imagePath: img, scale: 1.5 }, extra || {}));
+    const z = await FNF.makeZip([
+      { path: 'assets/data/characters/bf/config.json', data: T(lc('characters/bf/BOYFRIEND')), deflate: true },
+      { path: 'assets/data/characters/bf/offsets.txt', data: T('idle 0 0\nsingLEFT 10 -20\n'), deflate: true },
+      { path: 'assets/data/characters/bf-alt/config.json', data: T(lc('characters/bf/BOYFRIEND')), deflate: true },
+      { path: 'assets/data/characters/bf-alt/offsets.txt', data: T('idle 3 4\n'), deflate: true },
+      { path: 'assets/data/characters/dad/config.json', data: T(lc('characters/dad/DADDY')), deflate: true },
+      { path: 'assets/data/characters/dad/offsets.txt', data: T('idle 7 8\n'), deflate: true },
+      { path: 'assets/shared/images/characters/bf/BOYFRIEND.png', data: a1.png }, { path: 'assets/shared/images/characters/bf/BOYFRIEND.xml', data: T(a1.xml), deflate: true },
+      { path: 'assets/shared/images/characters/dad/DADDY.png', data: a2.png }, { path: 'assets/shared/images/characters/dad/DADDY.xml', data: T(a2.xml), deflate: true },
+    ]);
+    const r = await FNF.processZip(z, { scale: 0.5 });
+    const m = new Map(FNF.listZip(r.zip).map((e) => [e.path, e]));
+    const rd = async (p) => FNF.textDecode(await FNF.zipData(r.zip, m.get(p)));
+    for (const c of ['bf', 'bf-alt', 'dad']) assert.strictEqual(JSON.parse(await rd('assets/data/characters/' + c + '/config.json')).scale, 3, c + ' scale 1.5×2');
+    const o1 = await rd('assets/data/characters/bf/offsets.txt'), o2 = await rd('assets/data/characters/bf-alt/offsets.txt'), o3 = await rd('assets/data/characters/dad/offsets.txt');
+    assert.ok(o1 !== 'idle 0 0\nsingLEFT 10 -20\n' && o2 !== 'idle 3 4\n' && o3 !== 'idle 7 8\n', 'todos os offsets devem ser ajustados');
+    assert.strictEqual(o1.split('\n').length, 3); assert.ok(/^idle /.test(o2) && /^idle /.test(o3));
+    assert.ok(r.totals.configs === 3 && r.totals.atlases === 2 && r.totals.failed === 0, JSON.stringify(r.totals));
+    console.log('  ok Leather: 3 personagens (2 compartilham atlas), cada config.json/offsets.txt na sua pasta');
+  }
   console.log('  ok ZIP:', res.totals.atlases + ' atlas, ' + res.totals.configs + ' configs, ' + zin.length + ' → ' + res.zip.length + ' bytes');
   console.log('zipjob.test: TUDO OK');
 })().catch((e) => { console.error(e); process.exit(1); });
