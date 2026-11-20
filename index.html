@@ -220,6 +220,13 @@
         </select></div>
       <div class="field" id="c-astc-box" hidden><label for="c-astcblock" data-pt="Bloco ASTC">ASTC block size</label><select id="c-astcblock"></select></div>
     </div>
+    <div class="field"><label for="c-scale"><span data-pt="Tamanho da imagem">Image size</span> <output id="c-scale-val">1.00×</output></label>
+      <input type="range" id="c-scale" min="0.1" max="1" step="0.01" value="1">
+      <div class="chips" id="c-presets" role="group">
+        <button type="button" data-s="1">1.0</button><button type="button" data-s="0.75">0.75</button><button type="button" data-s="0.5">0.5</button>
+        <button type="button" data-s="0.35">0.35</button><button type="button" data-s="0.25">0.25</button><button type="button" data-s="0.1">0.1</button>
+      </div>
+      <small class="hint" data-pt="1.0 = tamanho original. Reduzir diminui a imagem em pixels (a engine vai mostrá-la menor, a não ser que você ajuste o scale dela).">1.0 = original size. Lowering it shrinks the image in pixels (the engine will show it smaller unless you adjust its scale).</small></div>
     <p class="hint" data-pt="ASTC economiza memória da GPU (tamanho fixo), mas o arquivo costuma ser maior que um PNG com muita transparência.">ASTC saves GPU memory (fixed size per block), but the file is often larger than a PNG with lots of transparency.</p>
     <div class="row"><button type="button" id="c-run" class="btn primary big" disabled data-pt="Comprimir">Compress</button><button type="button" id="c-zip" class="btn" hidden data-pt="Baixar tudo (.zip)">Download all (.zip)</button></div>
     <div id="c-progress" class="muted" aria-live="polite"></div>

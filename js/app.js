@@ -738,7 +738,7 @@
       if (!o) { rows.push('<div class="c-item"><span></span><div><div class="nm">' + esc(f.name) + '</div><div class="muted">' + fmtBytes(f.bytes.length) + '</div></div></div>'); return; }
       const warn = o.warnings.map((w) => '<div class="note warn">' + esc(w) + '</div>').join('');
       rows.push('<div class="c-item"><img alt="" src="' + o.preview + '"><div><div class="nm">' + esc(o.name) + '</div><div>' + fmtBytes(o.before) + ' → <b>' + fmtBytes(o.bytes.length) + '</b> ' + deltaHtml(o.before, o.bytes.length) +
-        '</div><div class="muted">' + esc(o.kind) + (o.psnr != null && o.psnr < 99 ? ' · PSNR ' + o.psnr.toFixed(1) + ' dB' : '') + ' · ' + o.width + '×' + o.height + '</div>' + warn + '</div><a class="btn small" download="' + esc(o.name) + '" href="' + o.url + '">' + L('Download', 'Baixar') + '</a></div>');
+        '</div><div class="muted">' + esc(o.kind) + (o.psnr != null && o.psnr < 99 ? ' · PSNR ' + o.psnr.toFixed(1) + ' dB' : '') + ' · ' + (o.scale && o.scale < 1 ? o.origW + '×' + o.origH + ' → ' : '') + o.width + '×' + o.height + '</div>' + warn + '</div><a class="btn small" download="' + esc(o.name) + '" href="' + o.url + '">' + L('Download', 'Baixar') + '</a></div>');
     });
     box.innerHTML = rows.join('');
     $('#c-run').disabled = C.running || !C.files.length;
@@ -764,7 +764,7 @@
     if (C.running || !C.files.length) return;
     C.running = true; C.urls.forEach((u) => URL.revokeObjectURL(u)); C.urls = []; C.out = [];
     $('#c-run').disabled = true;
-    const opts = { quality: $('#c-quality').value, format: $('#c-format').value, astcBlock: $('#c-astcblock').value };
+    const opts = { quality: $('#c-quality').value, format: $('#c-format').value, astcBlock: $('#c-astcblock').value, scale: parseFloat($('#c-scale').value) || 1 };
     try {
       for (let i = 0; i < C.files.length; i++) {
         $('#c-progress').textContent = L('Compressing {n}/{t}: ', 'Comprimindo {n}/{t}: ', { n: i + 1, t: C.files.length }) + C.files[i].name;
@@ -806,6 +806,10 @@
     $('#c-pick').addEventListener('click', (e) => { e.stopPropagation(); $('#c-in').click(); });
     $('#c-drop').addEventListener('click', () => $('#c-in').click());
     $('#c-in').addEventListener('change', async (e) => { await addImages(Array.from(e.target.files)); e.target.value = ''; });
+    const setCScale = (v) => { v = Math.min(1, Math.max(0.1, parseFloat(v) || 1)); $('#c-scale').value = v; $('#c-scale-val').textContent = v.toFixed(2) + '×'; $$('#c-presets button').forEach((b) => b.setAttribute('aria-pressed', String(Math.abs(parseFloat(b.dataset.s) - v) < 0.001))); };
+    $('#c-scale').addEventListener('input', (e) => setCScale(e.target.value));
+    $('#c-presets').addEventListener('click', (e) => { const b = e.target.closest('button[data-s]'); if (b) setCScale(b.dataset.s); });
+    setCScale(1);
     $('#c-format').addEventListener('change', () => { $('#c-astc-box').hidden = $('#c-format').value !== 'astc'; });
     $('#c-run').addEventListener('click', runCompress);
     $('#c-zip').addEventListener('click', zipCompressed);

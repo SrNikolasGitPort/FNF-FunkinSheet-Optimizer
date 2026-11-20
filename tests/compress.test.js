@@ -18,5 +18,16 @@ require('../js/demo.js');
   const back = await FNF.compressImage({ name: as.name, bytes: as.bytes }, { format: 'png', quality: 'lossless' });
   assert.ok(/\.png$/.test(back.name));
   console.log('  ok compress: original', input.bytes.length, '→ sem perdas', lossless.bytes.length, '| equilibrado', bal.bytes.length, '(' + bal.kind + ',', (bal.psnr || 0).toFixed(1), 'dB) | pequeno', small.bytes.length, '| ASTC', as.bytes.length, as.kind);
+  // escala: reduz a imagem em pixels antes de comprimir (PNG e ASTC)
+  for (const fmt of ['png', 'astc']) {
+    const sc = await FNF.compressImage(input, { format: fmt, quality: 'balanced', scale: 0.5 });
+    const w = Math.round(dec.width * 0.5), h = Math.round(dec.height * 0.5);
+    assert.ok(sc.width === w && sc.height === h && sc.origW === dec.width && sc.scale === 0.5, fmt + ' dimensões');
+    assert.ok(!sc.kept, 'com escala não pode manter o original');
+    const back2 = fmt === 'png' ? await FNF.decodePNG(sc.bytes) : FNF.decodeASTC(sc.bytes);
+    assert.ok(back2.width === w && back2.height === h, fmt + ' arquivo com as dimensões novas');
+    assert.ok(sc.bytes.length < bal.bytes.length || fmt === 'astc', fmt + ' menor');
+  }
+  console.log('  ok compress com escala 0.5 (PNG e ASTC)');
   console.log('compress.test: TUDO OK');
 })().catch((e) => { console.error(e); process.exit(1); });

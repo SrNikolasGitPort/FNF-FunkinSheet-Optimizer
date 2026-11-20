@@ -64,8 +64,13 @@
 
   /** input: {name, bytes}. opts: {format:'auto'|'png'|'astc', quality:'lossless'|'high'|'balanced'|'small', astcBlock} */
   async function compressImage(input, opts, onStep) {
-    const o = Object.assign({ format: 'auto', quality: 'balanced', astcBlock: 'auto' }, opts || {});
-    const img = await decodeAny(input.bytes);
+    const o = Object.assign({ format: 'auto', quality: 'balanced', astcBlock: 'auto', scale: 1 }, opts || {});
+    let img = await decodeAny(input.bytes);
+    const scale = Math.min(1, Math.max(0.1, Number(o.scale) || 1));
+    if (scale < 1) { // reduz o tamanho da imagem antes de comprimir
+      const nw = Math.max(1, Math.round(img.width * scale)), nh = Math.max(1, Math.round(img.height * scale));
+      img = { width: nw, height: nh, data: FNF.resizeRGBA(img.data, img.width, img.height, nw, nh, 'area'), kind: img.kind, origW: img.width, origH: img.height };
+    }
     // pixels 100% transparentes não precisam de cor
     const d = img.data;
     for (let i = 0; i < d.length; i += 4) if (d[i + 3] === 0) { d[i] = 0; d[i + 1] = 0; d[i + 2] = 0; }
@@ -76,10 +81,10 @@
     else r = await astcSmart(img, o.quality === 'lossless' ? 'high' : o.quality, o.astcBlock, onStep);
     const ext = fmt;
     const base = input.name.replace(/\.[^.]+$/, '');
-    let out = { name: base + '.' + ext, bytes: r.bytes, kind: r.kind, psnr: r.psnr, width: img.width, height: img.height, before: input.bytes.length, warnings, kept: false };
+    let out = { name: base + '.' + ext, bytes: r.bytes, kind: r.kind, psnr: r.psnr, width: img.width, height: img.height, origW: img.origW || img.width, origH: img.origH || img.height, scale, before: input.bytes.length, warnings, kept: false };
     // se não ficou menor no mesmo formato, mantém o original
     const sameFmt = (fmt === 'png' && img.kind === 'png') || (fmt === 'astc' && img.kind === 'astc');
-    if (sameFmt && out.bytes.length >= input.bytes.length) {
+    if (sameFmt && scale === 1 && out.bytes.length >= input.bytes.length) {
       out = Object.assign(out, { name: input.name, bytes: input.bytes, kind: FNF.t('cmp.kept'), psnr: 99, kept: true });
     }
     return out;
