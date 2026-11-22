@@ -5,7 +5,27 @@
 'use strict';
 (function (root) {
   const FNF = (root.FNF = root.FNF || {});
-  const QUALITY = { high: 0.5, balanced: 0.4, small: 0.3 };
+  // kbps (estéreo 44,1 kHz) -> qualidade VBR do libvorbis. O alvo é a fidelidade do arquivo ORIGINAL:
+  // nunca acima do necessário para igualá-lo, e com teto (0,5 ≈ 160 kbps) a partir do qual não há ganho audível.
+  const KBPS_Q = [[45, -0.1], [64, 0], [80, 0.1], [96, 0.2], [112, 0.3], [128, 0.4], [160, 0.5]];
+  const Q_MIN = 0.1, Q_MAX = 0.5;
+  function qualityFromKbps(k) {
+    if (k <= KBPS_Q[0][0]) return Q_MIN;
+    for (let i = 1; i < KBPS_Q.length; i++) {
+      if (k <= KBPS_Q[i][0]) { const a = KBPS_Q[i - 1], b = KBPS_Q[i]; return Math.max(Q_MIN, a[1] + (b[1] - a[1]) * (k - a[0]) / (b[0] - a[0])); }
+    }
+    return Q_MAX;
+  }
+  /** Qualidade automática de uma música: acompanha a faixa de maior bitrate (normalizado p/ estéreo 44,1 kHz). */
+  function autoQuality(tracks) {
+    let k = 0;
+    for (const t of tracks) {
+      const i = FNF.vorbis.info(t.bytes || t); if (!i || !i.seconds) continue;
+      const norm = (i.channels === 1 ? 1.8 : 1) * (i.rate / 44100);
+      k = Math.max(k, (t.bytes || t).length * 8 / i.seconds / 1000 * norm);
+    }
+    return k ? Math.min(Q_MAX, Math.round(qualityFromKbps(k) * 100) / 100) : 0.4;
+  }
   const ROLES = new Set(['player', 'opponent']); // sufixos de Voices que NÃO são dificuldade (Psych Engine)
   const dirOf = (p) => { const i = p.lastIndexOf('/'); return i < 0 ? '' : p.slice(0, i + 1); };
   const nameOf = (p) => p.slice(p.lastIndexOf('/') + 1);
@@ -52,17 +72,18 @@
 
   /** Executa um trabalho (usado no worker e em testes): mistura as faixas e recodifica; reduz a qualidade se ficar maior que as originais. */
   async function runMusicJob(job, onProgress) {
-    let q = job.quality;
+    let q = job.quality === undefined ? autoQuality(job.tracks) : job.quality;
+    const q0 = q;
     let r = await FNF.vorbis.mix({ tracks: job.tracks, quality: q, onProgress });
     let tries = 0;
     while (r.bytes.length > job.srcTotal && q > 0.15 && tries < 3) { q = Math.max(0.1, q - 0.1); tries++; r = await FNF.vorbis.mix({ tracks: job.tracks, quality: q }); }
-    return { bytes: r.bytes, channels: r.channels, rate: r.rate, seconds: r.seconds, peak: r.peak, quality: q, retries: tries };
+    return { bytes: r.bytes, channels: r.channels, rate: r.rate, seconds: r.seconds, peak: r.peak, quality: q, auto: q0, retries: tries, kbps: r.seconds ? Math.round(r.bytes.length * 8 / r.seconds / 1000) : 0 };
   }
 
   /** io: { runJob(job, onProgress) -> Promise<resultado>, concurrency, onProgress(stage, pct) } */
   async function processMusicZip(zipBytes, opts, io) {
-    opts = Object.assign({ quality: 'high', patchCharts: true }, opts || {});
-    const q = QUALITY[opts.quality] || QUALITY.high;
+    opts = Object.assign({ patchCharts: true }, opts || {});
+    const q = typeof opts.quality === 'number' ? opts.quality : undefined; // normalmente automático
     const P = async (stage, pct) => { if (io.onProgress) await io.onProgress(stage, pct); };
     await P(FNF.t('zj.reading'), 0);
     const entries = FNF.listZip(zipBytes);
@@ -107,10 +128,10 @@
       if (r.error) { rows.push({ path: j.out, status: 'error', note: r.error, before, after: before, sources: [] }); return; }
       if (failedDirs.has(j.dir)) { rows.push({ path: j.out, status: 'kept', note: FNF.t('au.note.dirfail'), before, after: before, sources: r.srcNames }); return; }
       const merging = j.voices.length > 0;
-      if (!merging && r.bytes.length >= r.srcTotal * 0.92) { rows.push({ path: j.out, status: 'kept', note: FNF.t('au.note.optimal'), before, after: before, sources: r.srcNames, seconds: r.seconds }); return; }
+      if (!merging && r.bytes.length >= r.srcTotal * 0.97) { rows.push({ path: j.out, status: 'kept', note: FNF.t('au.note.optimal'), before, after: before, sources: r.srcNames, seconds: r.seconds }); return; }
       if (j.outExists) repl.set(j.out, r.bytes); else adds.push({ path: j.out, data: r.bytes });
       if (merging) { j.voices.forEach((v) => removedVoices.add(v)); mergedDirs.add(j.dir); }
-      rows.push({ path: j.out, status: merging ? 'merged' : 'recompressed', before, after: r.bytes.length, sources: r.srcNames, seconds: r.seconds, peak: r.peak, quality: r.quality, note: r.peak > 2 ? FNF.t('au.note.peak', { p: r.peak.toFixed(2) }) : '' });
+      rows.push({ path: j.out, status: merging ? 'merged' : 'recompressed', before, after: r.bytes.length, sources: r.srcNames, seconds: r.seconds, peak: r.peak, quality: r.quality, kbps: r.kbps, note: r.peak > 2 ? FNF.t('au.note.peak', { p: r.peak.toFixed(2) }) : '' });
     });
     // Voices só somem se todos os trabalhos que as usam foram aplicados
     const stillNeeded = new Set();
@@ -159,5 +180,5 @@
     return { zip, report, rows, totals, problems };
   }
 
-  FNF.audio = { planMusic, parseName, runMusicJob, processMusicZip, QUALITY };
+  FNF.audio = { planMusic, parseName, runMusicJob, processMusicZip, qualityFromKbps, autoQuality };
 })(typeof self !== 'undefined' ? self : globalThis);

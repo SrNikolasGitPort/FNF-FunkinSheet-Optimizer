@@ -83,7 +83,7 @@ const ogg = (seed, secs, rate, ch, q) => FNF.vorbis.encodePCM({ data: synth(seed
   ];
   const zin = await FNF.makeZip(src);
   const steps = [];
-  const res = await FNF.audio.processMusicZip(zin, { quality: 'high' }, { concurrency: 2, runJob: (job, onP) => FNF.audio.runMusicJob(job, onP), onProgress: (s, p) => steps.push(p) });
+  const res = await FNF.audio.processMusicZip(zin, {}, { concurrency: 2, runJob: (job, onP) => FNF.audio.runMusicJob(job, onP), onProgress: (s, p) => steps.push(p) });
   assert.ok(steps[steps.length - 1] === 100);
   const out = new Map(FNF.listZip(res.zip).map((e) => [e.path, e]));
   assert.ok(!out.has('mod/songs/test/Voices.ogg') && !out.has('mod/songs/test/Voices-HardeCore.ogg'), 'Voices devem sumir');
@@ -99,6 +99,14 @@ const ogg = (seed, secs, rate, ch, q) => FNF.vorbis.encodePCM({ data: synth(seed
   assert.ok(res.problems.some((p) => /other formats/.test(p.msg)), 'aviso do mp3');
   assert.strictEqual(res.totals.charts, 1); assert.strictEqual(res.totals.removed, 2);
   console.log('  ok ZIP: ' + res.rows.map((r) => r.status).join(',') + ' | áudio ' + before + ' → ' + outAudio + ' bytes (' + Math.round(100 * outAudio / before) + '%)');
+  // qualidade automática: arquivo de alto bitrate é recodificado (inclusive sozinho) e fica menor
+  const hi = await ogg(9, 6, 44100, 2, 0.9);
+  const aq = FNF.audio.autoQuality([{ bytes: hi }]), lq = FNF.audio.autoQuality([{ bytes: await ogg(9, 6, 44100, 2, 0.0) }]);
+  assert.ok(aq <= 0.5 && lq < aq, 'auto q: ' + lq + ' < ' + aq);
+  const zhi = await FNF.makeZip([{ path: 'x/Inst.ogg', data: hi }]);
+  const rhi = await FNF.audio.processMusicZip(zhi, {}, { runJob: (job) => FNF.audio.runMusicJob(job) });
+  assert.strictEqual(rhi.rows[0].status, 'recompressed'); assert.ok(rhi.rows[0].after < hi.length * 0.8, 'Inst sozinho otimizado');
+  console.log('  ok qualidade automática: ' + hi.length + ' → ' + rhi.rows[0].after + ' bytes (q ' + rhi.rows[0].quality + ')');
   // sem charts
   const res2 = await FNF.audio.processMusicZip(zin, { patchCharts: false }, { runJob: (job) => FNF.audio.runMusicJob(job) });
   const o2 = new Map(FNF.listZip(res2.zip).map((e) => [e.path, e]));

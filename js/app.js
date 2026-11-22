@@ -797,7 +797,7 @@
     };
     const conc = useWorkers ? Math.max(1, Math.min(4, (navigator.hardwareConcurrency || 2) - 1)) : 1;
     try {
-      const res = await FNF.audio.processMusicZip(M.zip.bytes, { quality: $('#m-quality').value, patchCharts: $('#m-charts').checked },
+      const res = await FNF.audio.processMusicZip(M.zip.bytes, { patchCharts: $('#m-charts').checked },
         { concurrency: conc, runJob, onProgress: async (stage, pct) => { if (M.cancel) throw new Error(L('Cancelled.', 'Cancelado.')); mProgress(stage, pct); } });
       M.result = res; mRender(res); mStop();
     } catch (e) {

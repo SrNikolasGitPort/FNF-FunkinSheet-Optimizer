@@ -88,6 +88,24 @@
     };
   }
 
+  /** Lê só os cabeçalhos Ogg: { channels, rate, frames, seconds } (sem decodificar). null se não for Vorbis. */
+  function info(b) {
+    b = b.bytes || b;
+    const dv = new DataView(b.buffer, b.byteOffset, b.byteLength);
+    if (b.length < 58 || dv.getUint32(0, false) !== 0x4f676753) return null;
+    const nseg = b[26]; const o = 27 + nseg;
+    if (b[o] !== 1 || String.fromCharCode(b[o + 1], b[o + 2], b[o + 3], b[o + 4], b[o + 5], b[o + 6]) !== 'vorbis') return null;
+    const channels = b[o + 11], rate = dv.getUint32(o + 12, true);
+    let frames = 0;
+    for (let i = b.length - 14; i >= 0; i--) {
+      if (b[i] === 0x4f && b[i + 1] === 0x67 && b[i + 2] === 0x67 && b[i + 3] === 0x53) {
+        const lo = dv.getUint32(i + 6, true), hi = dv.getUint32(i + 10, true);
+        if (hi !== 0xffffffff || lo !== 0xffffffff) { frames = hi * 4294967296 + lo; break; }
+      }
+    }
+    return { channels, rate, frames, seconds: rate ? frames / rate : 0 };
+  }
+
   /** Mistura várias trilhas OGG (soma amostra a amostra) e codifica um único OGG Vorbis (VBR). */
   async function mix(opts) {
     const tracks = opts.tracks, quality = opts.quality === undefined ? 0.5 : opts.quality, onProgress = opts.onProgress;
@@ -162,5 +180,5 @@
     return bytes;
   }
 
-  FNF.vorbis = { mix, decode, encodePCM };
+  FNF.vorbis = { info, mix, decode, encodePCM };
 })(typeof self !== 'undefined' ? self : globalThis);
