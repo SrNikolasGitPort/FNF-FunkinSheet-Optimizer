@@ -723,9 +723,112 @@
     $('#a-play').textContent = A.playing ? L('Pause', 'Pausar') : L('Play', 'Reproduzir');
   }
   function selectMode(m) {
-    $('#view-opt').hidden = m !== 'opt'; $('#view-cmp').hidden = m !== 'cmp';
-    $('#mode-opt').setAttribute('aria-selected', String(m === 'opt')); $('#mode-cmp').setAttribute('aria-selected', String(m === 'cmp'));
+    $('#view-opt').hidden = m !== 'opt'; $('#view-cmp').hidden = m !== 'cmp'; $('#view-aud').hidden = m !== 'aud';
+    $('#mode-opt').setAttribute('aria-selected', String(m === 'opt')); $('#mode-cmp').setAttribute('aria-selected', String(m === 'cmp')); $('#mode-aud').setAttribute('aria-selected', String(m === 'aud'));
     if (m !== 'opt') aStop();
+  }
+
+
+  // ------------------------------------------------------------------ otimizar músicas (ZIP, OGG)
+  const M = { zip: null, result: null, running: false, cancel: false, workers: [], t0: 0, tick: 0 };
+  function mProgress(text, pct) {
+    $('#m-progress').hidden = false; $('#m-fill').style.width = Math.max(0, Math.min(100, pct)) + '%';
+    $('#m-progress .bar').setAttribute('aria-valuenow', String(Math.round(pct)));
+    if (!M.t0) M.t0 = Date.now();
+    clearInterval(M.tick);
+    const upd = () => { $('#m-progress-text').textContent = text + ' · ' + ((Date.now() - M.t0) / 1000).toFixed(0) + 's'; };
+    upd(); M.tick = setInterval(upd, 500);
+  }
+  function mStop() { clearInterval(M.tick); M.t0 = 0; $('#m-progress').hidden = true; }
+  function mError(msg) { const e = $('#m-error'); e.hidden = !msg; e.textContent = msg || ''; }
+  async function mLoad(file) {
+    if (!file) return;
+    if (!/\.zip$/i.test(file.name)) { mError(L('Please choose a .zip file.', 'Escolha um arquivo .zip.')); return; }
+    mError(''); M.result = null; $('#sec-music').hidden = true;
+    try {
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      const entries = FNF.listZip(bytes).filter((e) => !e.dir && /\.ogg$/i.test(e.path)).map((e) => e.path);
+      const plan = FNF.audio.planMusic(entries);
+      M.zip = { name: file.name, bytes, jobs: plan.jobs.length, songs: new Set(plan.jobs.map((j) => j.dir)).size };
+    } catch (e) { M.zip = null; mError((e && e.message) || String(e)); }
+    mRefresh();
+  }
+  function mRefresh() {
+    const z = M.zip, box = $('#m-summary');
+    if (!z) { box.innerHTML = ''; $('#m-run').disabled = true; return; }
+    box.innerHTML = '<div class="group"><span class="lbl">ZIP</span><span class="chip">' + esc(z.name) + ' <small>' + fmtBytes(z.bytes.length) + '</small><button type="button" id="m-clear" aria-label="' + L('Remove', 'Remover') + '">×</button></span></div>' +
+      (z.jobs ? '<div class="note">' + L('{s} song folder(s) found, {j} track(s) to produce. Everything else is copied back untouched.', '{s} pasta(s) de música encontrada(s), {j} faixa(s) a gerar. O resto volta sem alteração.', { s: z.songs, j: z.jobs }) + '</div>'
+        : '<div class="note warn">' + L('No Inst/Voices OGG files found in this ZIP.', 'Nenhum OGG Inst/Voices encontrado neste ZIP.') + '</div>');
+    $('#m-run').disabled = M.running || !z.jobs;
+    $('#m-clear').addEventListener('click', (e) => { e.stopPropagation(); M.zip = null; M.result = null; $('#sec-music').hidden = true; mRefresh(); });
+  }
+  function mPoolRun(job, onP) { // um worker por trabalho (o processMusicZip limita a concorrência)
+    return new Promise((resolve, reject) => {
+      let w;
+      try { w = new Worker('js/audioworker.js'); } catch (e) { reject({ fallback: true }); return; }
+      M.workers.push(w); let started = false;
+      const end = () => { w.terminate(); M.workers = M.workers.filter((x) => x !== w); };
+      w.onmessage = (ev) => {
+        started = true; const m = ev.data;
+        if (m.type === 'progress') onP(m.f);
+        else if (m.type === 'done') { end(); resolve(m.result); }
+        else if (m.type === 'error') { end(); reject(new Error(m.message)); }
+      };
+      w.onerror = (ev) => { end(); if (!started) reject({ fallback: true }); else reject(new Error(ev.message || L('Audio worker error.', 'Erro no processamento de áudio.'))); };
+      const tracks = job.tracks.map((t) => ({ name: t.name, buffer: t.bytes.slice().buffer }));
+      w.postMessage({ type: 'job', id: job.id, lang: FNF.lang, job: { id: job.id, quality: job.quality, srcTotal: job.srcTotal, tracks } }, tracks.map((t) => t.buffer));
+    });
+  }
+  function loadScript(src) { return new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = () => rej(new Error('failed to load ' + src)); document.head.appendChild(s); }); }
+  async function mRun() {
+    if (M.running || !M.zip) return;
+    M.running = true; M.cancel = false; mError(''); $('#sec-music').hidden = true; $('#m-run').disabled = true; $('#m-cancel').hidden = false;
+    mProgress(L('Starting…', 'Iniciando…'), 0);
+    let useWorkers = !!window.Worker, ready = null;
+    const runJob = async (job, onP) => {
+      if (M.cancel) throw new Error(L('Cancelled.', 'Cancelado.'));
+      if (useWorkers) {
+        try { return await mPoolRun(job, onP); }
+        catch (e) { if (!(e && e.fallback)) throw e; useWorkers = false; }
+      }
+      if (!ready) ready = (async () => { await loadScript('js/vorbis_wasm.js'); await loadScript('js/vorbis.js'); })();
+      await ready;
+      return FNF.audio.runMusicJob({ id: job.id, tracks: job.tracks, quality: job.quality, srcTotal: job.srcTotal }, onP);
+    };
+    const conc = useWorkers ? Math.max(1, Math.min(4, (navigator.hardwareConcurrency || 2) - 1)) : 1;
+    try {
+      const res = await FNF.audio.processMusicZip(M.zip.bytes, { quality: $('#m-quality').value, patchCharts: $('#m-charts').checked },
+        { concurrency: conc, runJob, onProgress: async (stage, pct) => { if (M.cancel) throw new Error(L('Cancelled.', 'Cancelado.')); mProgress(stage, pct); } });
+      M.result = res; mRender(res); mStop();
+    } catch (e) {
+      mStop(); if (!M.cancel) mError((e && e.message) || String(e));
+    } finally {
+      M.workers.forEach((w) => w.terminate()); M.workers = []; M.running = false; $('#m-cancel').hidden = true; mRefresh();
+    }
+  }
+  function mRender(res) {
+    const t = res.totals;
+    $('#m-result').innerHTML = '<div id="zip-summary"><b>' + fmtBytes(t.zipBefore) + ' → ' + fmtBytes(t.zipAfter) + '</b> <span class="d ' + (t.zipAfter <= t.zipBefore ? 'good' : 'bad') + '">' + FNF.delta(t.zipBefore, t.zipAfter) + '</span> · ' +
+      L('{n} track(s) produced', '{n} faixa(s) gerada(s)', { n: t.songs }) + (t.removed ? ' · ' + L('{n} Voices file(s) merged', '{n} arquivo(s) Voices juntado(s)', { n: t.removed }) : '') +
+      (t.charts ? ' · ' + L('{n} chart(s) updated', '{n} chart(s) atualizado(s)', { n: t.charts }) : '') +
+      (t.failed ? ' · <span class="d bad">' + L('{n} failed (originals kept)', '{n} com falha (originais mantidos)', { n: t.failed }) + '</span>' : '') + '</div>';
+    $('#m-notes').innerHTML = res.problems.map((p) => '<div class="note ' + (p.level === 'warn' ? 'warn' : '') + '">' + esc(p.msg) + '</div>').join('');
+    const st = { merged: L('merged', 'juntado'), recompressed: L('recompressed', 'recomprimido'), kept: L('kept', 'mantido'), error: L('error', 'erro') };
+    $('#m-table').innerHTML = res.rows.map((r) => '<div class="zrow ' + (r.status === 'error' ? 'err' : r.status === 'kept' ? 'kept' : '') + '"><span class="nm" title="' + esc(r.path) + '">' + esc(r.path) + '</span><span>' +
+      fmtBytes(r.before) + ' → ' + fmtBytes(r.after) + ' ' + deltaHtml(r.before, r.after) + '</span><span class="sub">' + esc(st[r.status] || r.status) + (r.sources && r.sources.length ? ' · ' + esc(r.sources.join(' + ')) : '') + (r.seconds ? ' · ' + Math.floor(r.seconds / 60) + ':' + String(Math.round(r.seconds % 60)).padStart(2, '0') : '') + (r.note ? ' · ' + esc(r.note) : '') + '</span></div>').join('');
+    $('#sec-music').hidden = false;
+    $('#sec-music').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+  function initMusic() {
+    $('#m-pick').addEventListener('click', (e) => { e.stopPropagation(); $('#m-in').click(); });
+    $('#m-drop').addEventListener('click', () => $('#m-in').click());
+    $('#m-in').addEventListener('change', async (e) => { await mLoad(e.target.files[0]); e.target.value = ''; });
+    $('#m-drop').addEventListener('dragover', (e) => { e.preventDefault(); e.stopPropagation(); });
+    $('#m-drop').addEventListener('drop', async (e) => { e.preventDefault(); e.stopPropagation(); await mLoad(e.dataTransfer.files[0]); });
+    $('#m-run').addEventListener('click', mRun);
+    $('#m-cancel').addEventListener('click', () => { M.cancel = true; M.workers.forEach((w) => w.terminate()); M.workers = []; });
+    $('#m-dl').addEventListener('click', () => { if (M.result) saveBlob(M.result.zip, 'application/zip', (M.zip ? M.zip.name.replace(/\.zip$/i, '') : 'music') + '-optimized.zip'); });
+    $('#m-report').addEventListener('click', () => { if (M.result) saveBlob(FNF.textEncode(M.result.report), 'text/plain', 'optimizer-music-report.txt'); });
   }
 
   // ------------------------------------------------------------------ comprimir imagens
@@ -803,6 +906,8 @@
     $$('#lang-seg button').forEach((b) => b.addEventListener('click', () => setLanguage(b.dataset.lang, true)));
     $('#mode-opt').addEventListener('click', () => selectMode('opt'));
     $('#mode-cmp').addEventListener('click', () => selectMode('cmp'));
+    $('#mode-aud').addEventListener('click', () => selectMode('aud'));
+    initMusic();
     $('#c-pick').addEventListener('click', (e) => { e.stopPropagation(); $('#c-in').click(); });
     $('#c-drop').addEventListener('click', () => $('#c-in').click());
     $('#c-in').addEventListener('change', async (e) => { await addImages(Array.from(e.target.files)); e.target.value = ''; });
@@ -830,7 +935,7 @@
     ['dragleave', 'drop'].forEach((ev) => window.addEventListener(ev, (e) => { if (ev === 'drop' || e.target === document.documentElement || e.relatedTarget === null) drop.classList.remove('over'); }));
     window.addEventListener('drop', async (e) => {
       e.preventDefault();
-      if (!$('#view-cmp').hidden) return;
+      if (!$('#view-cmp').hidden || !$('#view-aud').hidden) return;
       try { await addEntries(await collectDrop(e.dataTransfer)); } catch (err) { showError(L('Could not read the dropped files: ', 'Não consegui ler os arquivos soltos: ') + err.message); }
     });
     $('#rm-list').addEventListener('change', (e) => {

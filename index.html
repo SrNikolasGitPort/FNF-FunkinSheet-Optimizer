@@ -28,6 +28,7 @@
 <nav class="modes" role="tablist" aria-label="Mode">
   <button role="tab" id="mode-opt" aria-selected="true" data-pt="Otimizar atlas">Optimize atlases</button>
   <button role="tab" id="mode-cmp" aria-selected="false" data-pt="Comprimir imagens">Compress images</button>
+  <button role="tab" id="mode-aud" aria-selected="false" data-pt="Otimizar músicas">Optimize music</button>
 </nav>
 
 <main id="view-opt">
@@ -193,6 +194,51 @@
   </section>
 </main>
 
+<main id="view-aud" hidden>
+  <section class="card" aria-labelledby="h-afiles">
+    <h2 id="h-afiles"><span class="n">1</span><span data-pt="ZIP das músicas">Songs ZIP</span></h2>
+    <div id="m-drop" class="drop" tabindex="0" role="button">
+      <strong data-pt="Arraste o ZIP da pasta de músicas para cá">Drop the ZIP of your songs folder here</strong>
+      <span data-pt="O site junta Inst + Voices de cada música (e de cada dificuldade: Voices-Hard.ogg vira Inst-Hard.ogg), recodifica em OGG leve e devolve o ZIP com a mesma estrutura. Só OGG.">The site merges Inst + Voices for each song (and each difficulty: Voices-Hard.ogg becomes Inst-Hard.ogg), re-encodes to a light OGG and returns the ZIP with the same structure. OGG only.</span>
+      <div class="row"><button type="button" id="m-pick" class="btn primary" data-pt="Escolher ZIP">Choose ZIP</button></div>
+    </div>
+    <input type="file" id="m-in" hidden accept=".zip">
+    <div id="m-summary"></div>
+  </section>
+  <section class="card" aria-labelledby="h-aopts">
+    <h2 id="h-aopts"><span class="n">2</span><span data-pt="Compressão">Compression</span></h2>
+    <div class="grid">
+      <div class="field"><label for="m-quality" data-pt="Qualidade do som">Sound quality</label>
+        <select id="m-quality">
+          <option value="high" selected data-pt="Alta, fiel ao original (recomendado)">High, faithful to the original (recommended)</option>
+          <option value="balanced" data-pt="Equilibrada (mais leve)">Balanced (lighter)</option>
+          <option value="small" data-pt="Máxima leveza">Smallest</option>
+        </select></div>
+    </div>
+    <label class="tog"><input type="checkbox" id="m-charts" checked><span data-pt="<b>Atualizar os charts</b> (needsVoices → false) das músicas que perderam o Voices, para a engine não procurar um arquivo que não existe mais"><b>Update the charts</b> (needsVoices → false) of songs that lost their Voices file, so the engine doesn't look for a file that no longer exists</span></label>
+    <p class="hint" data-pt="Dica: a qualidade Alta usa o mesmo nível dos OGG normais do FNF; o arquivo final nunca fica maior que os originais somados. Sufixos Player/Opponent do Psych Engine são juntados no Inst; qualquer outro sufixo é tratado como dificuldade.">Tip: High uses the same level as typical FNF OGGs; the result is never larger than the originals combined. Psych Engine Player/Opponent suffixes are merged into the Inst; any other suffix is treated as a difficulty.</p>
+    <div class="row">
+      <button type="button" id="m-run" class="btn primary big" disabled data-pt="Otimizar músicas">Optimize music</button>
+      <button type="button" id="m-cancel" class="btn" hidden data-pt="Cancelar">Cancel</button>
+    </div>
+    <div id="m-progress" class="progress" hidden>
+      <div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="m-fill"></i></div>
+      <span id="m-progress-text">…</span>
+    </div>
+    <div id="m-error" class="alert error" role="alert" hidden></div>
+  </section>
+  <section id="sec-music" class="card" hidden aria-labelledby="h-mres">
+    <div class="res-head">
+      <h2 id="h-mres"><span class="n">3</span><span data-pt="Resultado">Result</span></h2>
+      <button type="button" id="m-dl" class="btn primary" data-pt="Baixar ZIP otimizado">Download optimized ZIP</button>
+    </div>
+    <div id="m-result"></div>
+    <div id="m-notes"></div>
+    <div id="m-table" class="c-list"></div>
+    <div class="row"><button type="button" id="m-report" class="btn" data-pt="Baixar relatório (.txt)">Download report (.txt)</button></div>
+  </section>
+</main>
+
 <main id="view-cmp" hidden>
   <section class="card" aria-labelledby="h-cfiles">
     <h2 id="h-cfiles"><span class="n">1</span><span data-pt="Imagens">Images</span></h2>
@@ -248,6 +294,7 @@
 <script defer src="js/pipeline.js"></script>
 <script defer src="js/zipjob.js"></script>
 <script defer src="js/compress.js"></script>
+<script defer src="js/audiojob.js"></script>
 <script defer src="js/app.js"></script>
 </body>
 </html>

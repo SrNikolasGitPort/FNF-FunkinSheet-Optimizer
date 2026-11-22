@@ -46,6 +46,7 @@ Node 18+:
 
 ```bash
 node tests/png.test.js        # PNG decoder/encoder
+node tests/audio.test.js      # music tab (OGG)
 node tests/zipjob.test.js     # ZIP mode
 node tests/pipeline.test.js   # pipeline, rotated, offsets, configs, ZIP
 node tests/astc.test.js       # ASTC encode/decode round trips and pipeline
@@ -74,6 +75,19 @@ js/demo.js       example character
 js/app.js        UI
 tests/           automated tests
 ```
+
+## Music tab (OGG)
+
+**Optimize music** takes the ZIP of your songs folder and, for each song folder, merges `Inst` + `Voices` into a single light OGG:
+
+- `Inst.ogg` + `Voices.ogg` → `Inst.ogg`
+- `Inst.ogg` + `Voices-HardeCore.ogg` → `Inst-HardeCore.ogg` (an existing `Inst-HardeCore.ogg` is used instead of `Inst.ogg`)
+- Psych Engine `Voices-Player` / `Voices-Opponent` are merged into the Inst; any other suffix is treated as a difficulty.
+- The merged `Voices*.ogg` files are removed from the ZIP, and the charts of those songs get `needsVoices: false` (optional checkbox) so the engine doesn't look for a missing file.
+- Mixing is sample-exact (different channel counts / sample rates are handled), then re-encoded with libvorbis VBR: **High** (default, same level as typical FNF OGGs), **Balanced** or **Smallest**. The result is never larger than the original files combined (quality steps down automatically if needed), and a lone `Inst.ogg` is only replaced when the saving is meaningful.
+- OGG Vorbis only; other audio formats are reported and left untouched. Everything else in the ZIP is copied back untouched.
+
+Decoding and encoding run entirely in your browser (several workers in parallel) using the official **libogg/libvorbis compiled to WebAssembly** (`tools/vorbis-wasm/`, rebuild with `build.sh`). The decoder matches ffmpeg's to ~1e-7 and the encoder produces the same size/SNR as ffmpeg's libvorbis (see `tests/audio.test.js`). Licenses: `THIRD_PARTY_NOTICES.md`.
 
 ## ZIP mode
 
