@@ -6,9 +6,9 @@
 (function (root) {
   const FNF = (root.FNF = root.FNF || {});
   // kbps (estéreo 44,1 kHz) -> qualidade VBR do libvorbis. O alvo é a fidelidade do arquivo ORIGINAL:
-  // nunca acima do necessário para igualá-lo, e com teto (0,2 ≈ 96 kbps estéreo), já bom para música de jogo.
+  // nunca acima do necessário para igualá-lo, e com piso (0,3 ≈ 112 kbps) e teto (0,5 ≈ 160 kbps) estéreo.
   const KBPS_Q = [[45, -0.1], [64, 0], [80, 0.1], [96, 0.2], [112, 0.3], [128, 0.4], [160, 0.5]];
-  const Q_MIN = 0.0, Q_MAX = 0.2, SRC_FACTOR = 0.6; // vorbis é mais eficiente que a maioria dos OGG de origem: 60% do bitrate de origem basta (teto ≈ 96 kbps estéreo)
+  const Q_MIN = 0.3, Q_MAX = 0.5, SRC_FACTOR = 1.0; // qualidade primeiro: acompanha o bitrate de origem, piso ≈ 112 kbps e teto ≈ 160 kbps estéreo
   function qualityFromKbps(k) {
     if (k <= KBPS_Q[0][0]) return Q_MIN;
     for (let i = 1; i < KBPS_Q.length; i++) {
@@ -76,7 +76,7 @@
     const q0 = q;
     let r = await FNF.vorbis.mix({ tracks: job.tracks, quality: q, onProgress });
     let tries = 0;
-    while (r.bytes.length > job.srcTotal && q > 0.05 && tries < 3) { q = Math.max(0, q - 0.1); tries++; r = await FNF.vorbis.mix({ tracks: job.tracks, quality: q }); }
+    while (r.bytes.length > job.srcTotal && q > 0.25 && tries < 2) { q = Math.max(0.25, q - 0.05); tries++; r = await FNF.vorbis.mix({ tracks: job.tracks, quality: q }); }
     return { bytes: r.bytes, channels: r.channels, rate: r.rate, seconds: r.seconds, peak: r.peak, quality: q, auto: q0, retries: tries, kbps: r.seconds ? Math.round(r.bytes.length * 8 / r.seconds / 1000) : 0 };
   }
 
