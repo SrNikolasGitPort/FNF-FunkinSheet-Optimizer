@@ -102,7 +102,7 @@ const ogg = (seed, secs, rate, ch, q) => FNF.vorbis.encodePCM({ data: synth(seed
   // qualidade automática: arquivo de alto bitrate é recodificado (inclusive sozinho) e fica menor
   const hi = await ogg(9, 6, 44100, 2, 0.9);
   const aq = FNF.audio.autoQuality([{ bytes: hi }]), lq = FNF.audio.autoQuality([{ bytes: await ogg(9, 6, 44100, 2, 0.0) }]);
-  assert.ok(aq <= 0.3 && lq < aq, 'auto q: ' + lq + ' < ' + aq);
+  assert.ok(aq <= 0.2 && lq < aq, 'auto q: ' + lq + ' < ' + aq);
   const zhi = await FNF.makeZip([{ path: 'x/Inst.ogg', data: hi }]);
   const rhi = await FNF.audio.processMusicZip(zhi, {}, { runJob: (job) => FNF.audio.runMusicJob(job) });
   assert.strictEqual(rhi.rows[0].status, 'recompressed'); assert.ok(rhi.rows[0].after < hi.length * 0.8, 'Inst sozinho otimizado');

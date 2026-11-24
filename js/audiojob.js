@@ -6,9 +6,9 @@
 (function (root) {
   const FNF = (root.FNF = root.FNF || {});
   // kbps (estéreo 44,1 kHz) -> qualidade VBR do libvorbis. O alvo é a fidelidade do arquivo ORIGINAL:
-  // nunca acima do necessário para igualá-lo, e com teto (0,3 ≈ 112 kbps estéreo) a partir do qual o ganho audível é mínimo.
+  // nunca acima do necessário para igualá-lo, e com teto (0,2 ≈ 96 kbps estéreo), já bom para música de jogo.
   const KBPS_Q = [[45, -0.1], [64, 0], [80, 0.1], [96, 0.2], [112, 0.3], [128, 0.4], [160, 0.5]];
-  const Q_MIN = 0.0, Q_MAX = 0.3, SRC_FACTOR = 0.75; // vorbis é mais eficiente que a maioria dos OGG de origem: 75% do bitrate de origem basta
+  const Q_MIN = 0.0, Q_MAX = 0.2, SRC_FACTOR = 0.6; // vorbis é mais eficiente que a maioria dos OGG de origem: 60% do bitrate de origem basta (teto ≈ 96 kbps estéreo)
   function qualityFromKbps(k) {
     if (k <= KBPS_Q[0][0]) return Q_MIN;
     for (let i = 1; i < KBPS_Q.length; i++) {
