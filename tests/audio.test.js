@@ -107,13 +107,14 @@ const ogg = (seed, secs, rate, ch, q) => FNF.vorbis.encodePCM({ data: synth(seed
   const rhi = await FNF.audio.processMusicZip(zhi, {}, { runJob: (job) => FNF.audio.runMusicJob(job) });
   assert.strictEqual(rhi.rows[0].status, 'recompressed'); assert.ok(rhi.rows[0].after < hi.length * 0.8, 'Inst sozinho otimizado');
   console.log('  ok qualidade automática: ' + hi.length + ' → ' + rhi.rows[0].after + ' bytes (q ' + rhi.rows[0].quality + ')');
-  // estéreo falso (L==R) vira mono; estéreo de verdade continua estéreo
+  // canais respeitados: estéreo (mesmo L==R) continua estéreo; mono continua mono
   const dmo = synth(5, 6, 44100, 1), dual = await FNF.vorbis.encodePCM({ data: [dmo[0], dmo[0]], rate: 44100, quality: 0.5 });
-  const rm = await FNF.audio.runMusicJob({ tracks: [{ name: 'a', bytes: dual }], srcTotal: dual.length });
-  assert.strictEqual(rm.channels, 1, 'L==R deve virar mono'); assert.ok(rm.bytes.length < dual.length * 0.5, 'mono menor: ' + rm.bytes.length + ' vs ' + dual.length);
-  const rs = await FNF.audio.runMusicJob({ tracks: [{ name: 'a', bytes: hi }], srcTotal: hi.length });
-  assert.strictEqual(rs.channels, 2, 'estéreo real preservado');
-  console.log('  ok estéreo falso → mono: ' + dual.length + ' → ' + rm.bytes.length + ' bytes; estéreo real mantido');
+  const rd = await FNF.audio.runMusicJob({ tracks: [{ name: 'a', bytes: dual }], srcTotal: dual.length });
+  assert.strictEqual(rd.channels, 2, 'estéreo deve continuar estéreo');
+  const mono1 = await FNF.vorbis.encodePCM({ data: dmo, rate: 44100, quality: 0.5 });
+  const rm = await FNF.audio.runMusicJob({ tracks: [{ name: 'a', bytes: mono1 }], srcTotal: mono1.length });
+  assert.strictEqual(rm.channels, 1, 'mono deve continuar mono');
+  console.log('  ok canais respeitados (estéreo → estéreo, mono → mono)');
   // sem charts
   const res2 = await FNF.audio.processMusicZip(zin, { patchCharts: false }, { runJob: (job) => FNF.audio.runMusicJob(job) });
   const o2 = new Map(FNF.listZip(res2.zip).map((e) => [e.path, e]));

@@ -74,9 +74,9 @@
   async function runMusicJob(job, onProgress) {
     let q = job.quality === undefined ? autoQuality(job.tracks) : job.quality;
     const q0 = q;
-    let r = await FNF.vorbis.mix({ tracks: job.tracks, quality: q, onProgress, autoMono: true });
+    let r = await FNF.vorbis.mix({ tracks: job.tracks, quality: q, onProgress });
     let tries = 0;
-    while (r.bytes.length > job.srcTotal && q > 0.05 && tries < 3) { q = Math.max(0, q - 0.1); tries++; r = await FNF.vorbis.mix({ tracks: job.tracks, quality: q, autoMono: true }); }
+    while (r.bytes.length > job.srcTotal && q > 0.05 && tries < 3) { q = Math.max(0, q - 0.1); tries++; r = await FNF.vorbis.mix({ tracks: job.tracks, quality: q }); }
     return { bytes: r.bytes, channels: r.channels, rate: r.rate, seconds: r.seconds, peak: r.peak, quality: q, auto: q0, retries: tries, kbps: r.seconds ? Math.round(r.bytes.length * 8 / r.seconds / 1000) : 0 };
   }
 
