@@ -60,7 +60,8 @@
             got = x.dec_read(d.h, rbuf, n);
             if (got < n) d.done = true;
             const s = f32(x, rbuf, got * inCh);
-            for (let i = 0; i < got; i++) for (let c = 0; c < outCh; c++) out[i * outCh + c] = s[i * inCh + (inCh === 1 ? 0 : c)];
+            if (outCh === 1 && inCh > 1) { for (let i = 0; i < got; i++) { let a = 0; for (let c = 0; c < inCh; c++) a += s[i * inCh + c]; out[i] = a / inCh; } }
+            else for (let i = 0; i < got; i++) for (let c = 0; c < outCh; c++) out[i * outCh + c] = s[i * inCh + (inCh === 1 ? 0 : c)];
           }
           return { data: out, got };
         }
@@ -75,6 +76,7 @@
           if (i0 >= src.length / inCh) { d.done = true; break; }
           const fr = p - i0, i1 = Math.min(i0 + 1, src.length / inCh - 1);
           for (let c = 0; c < outCh; c++) {
+            if (outCh === 1 && inCh > 1) { let a = 0; for (let k = 0; k < inCh; k++) a += src[i0 * inCh + k] * (1 - fr) + src[i1 * inCh + k] * fr; out[i] = a / inCh; continue; }
             const ci = inCh === 1 ? 0 : c;
             out[i * outCh + c] = src[i0 * inCh + ci] * (1 - fr) + src[i1 * inCh + ci] * fr;
           }
@@ -113,9 +115,26 @@
     const x = await instance();
     const decs = tracks.map((t, i) => openDecoder(x, t.bytes || t, t.name || 'track ' + (i + 1)));
     const outRate = decs[0].rate;
-    const outCh = Math.max(...decs.map((d) => d.channels));
+    let outCh = Math.max(...decs.map((d) => d.channels));
     if (decs.some((d) => d.channels !== 1 && d.channels !== outCh)) throw new Error(FNF.t('au.err.channels'));
     const CH = 4096;
+    let mono = false;
+    if (opts.autoMono && outCh === 2) { // estéreo "falso" (L≈R): codifica em mono, metade do tamanho
+      const sc = decs.map((d) => makeReader(x, d, 2, outRate, CH));
+      let eM = 0, eS = 0;
+      for (;;) {
+        let n = 0; const ps = [];
+        for (const r of sc) { const p = r.read(CH); ps.push(p.data); if (p.got > n) n = p.got; }
+        if (n === 0) break;
+        for (let i = 0; i < n; i++) { let l = 0, rr = 0; for (const d of ps) { l += d[i * 2]; rr += d[i * 2 + 1]; } const m = l + rr, sd = l - rr; eM += m * m; eS += sd * sd; }
+      }
+      sc.forEach((r) => r.free());
+      mono = eS <= eM * (opts.monoThreshold || 3e-4);
+      // reabre os decodificadores do zero
+      decs.forEach((d) => x.dec_free(d.h));
+      decs.length = 0; tracks.forEach((t, i) => decs.push(openDecoder(x, t.bytes || t, t.name || 'track ' + (i + 1))));
+      if (mono) outCh = 1;
+    }
     const readers = decs.map((d) => makeReader(x, d, outCh, outRate, CH));
     const enc = x.enc_new(outCh, outRate, quality, (Math.random() * 0x7fffffff) | 0);
     if (!x.enc_ok(enc)) throw new Error(FNF.t('au.err.encinit'));
@@ -145,7 +164,7 @@
     x.enc_free(enc);
     let total = 0; for (const c of chunks) total += c.length;
     const bytes = new Uint8Array(total); let o = 0; for (const c of chunks) { bytes.set(c, o); o += c.length; }
-    return { bytes, channels: outCh, rate: outRate, frames, seconds: frames / outRate, peak };
+    return { bytes, channels: outCh, rate: outRate, frames, seconds: frames / outRate, peak, mono };
   }
 
   /** Decodifica tudo para PCM float (planar). Usado em testes e verificações. */

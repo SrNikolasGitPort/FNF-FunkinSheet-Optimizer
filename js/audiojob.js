@@ -6,9 +6,9 @@
 (function (root) {
   const FNF = (root.FNF = root.FNF || {});
   // kbps (estéreo 44,1 kHz) -> qualidade VBR do libvorbis. O alvo é a fidelidade do arquivo ORIGINAL:
-  // nunca acima do necessário para igualá-lo, e com teto (0,5 ≈ 160 kbps) a partir do qual não há ganho audível.
+  // nunca acima do necessário para igualá-lo, e com teto (0,3 ≈ 112 kbps estéreo) a partir do qual o ganho audível é mínimo.
   const KBPS_Q = [[45, -0.1], [64, 0], [80, 0.1], [96, 0.2], [112, 0.3], [128, 0.4], [160, 0.5]];
-  const Q_MIN = 0.1, Q_MAX = 0.5;
+  const Q_MIN = 0.0, Q_MAX = 0.3, SRC_FACTOR = 0.75; // vorbis é mais eficiente que a maioria dos OGG de origem: 75% do bitrate de origem basta
   function qualityFromKbps(k) {
     if (k <= KBPS_Q[0][0]) return Q_MIN;
     for (let i = 1; i < KBPS_Q.length; i++) {
@@ -22,7 +22,7 @@
     for (const t of tracks) {
       const i = FNF.vorbis.info(t.bytes || t); if (!i || !i.seconds) continue;
       const norm = (i.channels === 1 ? 1.8 : 1) * (i.rate / 44100);
-      k = Math.max(k, (t.bytes || t).length * 8 / i.seconds / 1000 * norm);
+      k = Math.max(k, (t.bytes || t).length * 8 / i.seconds / 1000 * norm * SRC_FACTOR);
     }
     return k ? Math.min(Q_MAX, Math.round(qualityFromKbps(k) * 100) / 100) : 0.4;
   }
@@ -74,9 +74,9 @@
   async function runMusicJob(job, onProgress) {
     let q = job.quality === undefined ? autoQuality(job.tracks) : job.quality;
     const q0 = q;
-    let r = await FNF.vorbis.mix({ tracks: job.tracks, quality: q, onProgress });
+    let r = await FNF.vorbis.mix({ tracks: job.tracks, quality: q, onProgress, autoMono: true });
     let tries = 0;
-    while (r.bytes.length > job.srcTotal && q > 0.15 && tries < 3) { q = Math.max(0.1, q - 0.1); tries++; r = await FNF.vorbis.mix({ tracks: job.tracks, quality: q }); }
+    while (r.bytes.length > job.srcTotal && q > 0.05 && tries < 3) { q = Math.max(0, q - 0.1); tries++; r = await FNF.vorbis.mix({ tracks: job.tracks, quality: q, autoMono: true }); }
     return { bytes: r.bytes, channels: r.channels, rate: r.rate, seconds: r.seconds, peak: r.peak, quality: q, auto: q0, retries: tries, kbps: r.seconds ? Math.round(r.bytes.length * 8 / r.seconds / 1000) : 0 };
   }
 

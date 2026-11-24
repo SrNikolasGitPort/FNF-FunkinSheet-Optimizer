@@ -102,11 +102,18 @@ const ogg = (seed, secs, rate, ch, q) => FNF.vorbis.encodePCM({ data: synth(seed
   // qualidade automática: arquivo de alto bitrate é recodificado (inclusive sozinho) e fica menor
   const hi = await ogg(9, 6, 44100, 2, 0.9);
   const aq = FNF.audio.autoQuality([{ bytes: hi }]), lq = FNF.audio.autoQuality([{ bytes: await ogg(9, 6, 44100, 2, 0.0) }]);
-  assert.ok(aq <= 0.5 && lq < aq, 'auto q: ' + lq + ' < ' + aq);
+  assert.ok(aq <= 0.3 && lq < aq, 'auto q: ' + lq + ' < ' + aq);
   const zhi = await FNF.makeZip([{ path: 'x/Inst.ogg', data: hi }]);
   const rhi = await FNF.audio.processMusicZip(zhi, {}, { runJob: (job) => FNF.audio.runMusicJob(job) });
   assert.strictEqual(rhi.rows[0].status, 'recompressed'); assert.ok(rhi.rows[0].after < hi.length * 0.8, 'Inst sozinho otimizado');
   console.log('  ok qualidade automática: ' + hi.length + ' → ' + rhi.rows[0].after + ' bytes (q ' + rhi.rows[0].quality + ')');
+  // estéreo falso (L==R) vira mono; estéreo de verdade continua estéreo
+  const dmo = synth(5, 6, 44100, 1), dual = await FNF.vorbis.encodePCM({ data: [dmo[0], dmo[0]], rate: 44100, quality: 0.5 });
+  const rm = await FNF.audio.runMusicJob({ tracks: [{ name: 'a', bytes: dual }], srcTotal: dual.length });
+  assert.strictEqual(rm.channels, 1, 'L==R deve virar mono'); assert.ok(rm.bytes.length < dual.length * 0.5, 'mono menor: ' + rm.bytes.length + ' vs ' + dual.length);
+  const rs = await FNF.audio.runMusicJob({ tracks: [{ name: 'a', bytes: hi }], srcTotal: hi.length });
+  assert.strictEqual(rs.channels, 2, 'estéreo real preservado');
+  console.log('  ok estéreo falso → mono: ' + dual.length + ' → ' + rm.bytes.length + ' bytes; estéreo real mantido');
   // sem charts
   const res2 = await FNF.audio.processMusicZip(zin, { patchCharts: false }, { runJob: (job) => FNF.audio.runMusicJob(job) });
   const o2 = new Map(FNF.listZip(res2.zip).map((e) => [e.path, e]));
