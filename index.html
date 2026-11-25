@@ -35,16 +35,14 @@
   <section class="card" id="sec-files" aria-labelledby="h-files">
     <h2 id="h-files"><span class="n">1</span><span data-pt="Arquivos">Files</span></h2>
     <div id="drop" class="drop" tabindex="0" role="button">
-      <strong data-pt="Arraste um ZIP, os arquivos ou a pasta para cá">Drop a ZIP, your files or a folder here</strong>
+      <strong data-pt="Arraste um ZIP ou os arquivos para cá">Drop a ZIP or your files here</strong>
       <span data-pt="Com um ZIP (mod, pasta de personagens…) o site acha e otimiza os sprites onde estiverem, junto com os JSON do Psych e config.json + offsets.txt do Leather, e devolve um ZIP com a mesma estrutura. Também funciona com atlas PNG/ASTC + XML soltos.">With a ZIP (a mod, a characters folder…) the site finds and optimizes the sprites wherever they are, together with Psych JSONs and Leather config.json + offsets.txt, and gives you back a ZIP with the same structure. Loose PNG/ASTC + XML atlases work too.</span>
       <div class="row">
         <button type="button" id="btn-zip-pick" class="btn primary" data-pt="Escolher ZIP">Choose ZIP</button>
         <button type="button" id="btn-pick" class="btn" data-pt="Escolher arquivos">Choose files</button>
-        <button type="button" id="btn-folder" class="btn ghost" data-pt="Escolher pasta">Choose folder</button>
       </div>
     </div>
     <input type="file" id="in-files" multiple hidden accept=".zip,.png,.astc,.xml,.json,.txt">
-    <input type="file" id="in-folder" hidden webkitdirectory multiple>
     <div id="file-summary" class="summary" aria-live="polite"></div>
   </section>
 

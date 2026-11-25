@@ -926,11 +926,9 @@
     $('#zip-dl').addEventListener('click', () => { if (state.zipResult) saveBlob(state.zipResult.zip, 'application/zip', (state.zip ? state.zip.name.replace(/\.zip$/i, '') : 'mod') + '-optimized.zip'); });
     $('#zip-report').addEventListener('click', () => { if (state.zipResult) saveBlob(FNF.textEncode(state.zipResult.report), 'text/plain', 'optimizer-report.txt'); });
     $('#btn-pick').addEventListener('click', (e) => { e.stopPropagation(); $('#in-files').click(); });
-    $('#btn-folder').addEventListener('click', (e) => { e.stopPropagation(); $('#in-folder').click(); });
     drop.addEventListener('click', () => $('#in-files').click());
     drop.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('#in-files').click(); } });
     $('#in-files').addEventListener('change', async (e) => { await addEntries(Array.from(e.target.files).map((f) => ({ file: f, path: f.name }))); e.target.value = ''; });
-    $('#in-folder').addEventListener('change', async (e) => { await addEntries(Array.from(e.target.files).map((f) => ({ file: f, path: f.webkitRelativePath || f.name }))); e.target.value = ''; });
     ['dragenter', 'dragover'].forEach((ev) => window.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add('over'); }));
     ['dragleave', 'drop'].forEach((ev) => window.addEventListener(ev, (e) => { if (ev === 'drop' || e.target === document.documentElement || e.relatedTarget === null) drop.classList.remove('over'); }));
     window.addEventListener('drop', async (e) => {
